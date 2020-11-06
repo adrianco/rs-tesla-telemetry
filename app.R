@@ -53,7 +53,7 @@ ui <- fluidPage(
     titlePanel("Shiny Tesla Telemetry Analyzer"),
     DTOutput("sumtab"),
     # Show a map of the track
-    leafletOutput("map")
+    leafletOutput("map", height=600)
 )
 
 # Define server logic for viewing trackfile
