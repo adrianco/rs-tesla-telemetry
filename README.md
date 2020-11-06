@@ -56,3 +56,4 @@ The app also persists a list of laps, with the structure shown above, and a summ
  
  The code drops lap 0 (driving in the hot pit), splits the rest of the data into laps, and calls plap on each to generate a row for each lap in the data frame
  
+ ![Screenshot](rs-tesla-telemetry-screenshot.png)
