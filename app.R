@@ -31,7 +31,7 @@ plap <- function(lap) {
     # take the difference between the first and last sample for the lap, should really take the time from the next lap
     lt <- (lap[laplen,2] - lap[1,2])/1000.0
     KW <- max(lap[,13])
-    gms <- 9.80665
+    gms <<- 9.80665
     # lap number, time in seconds, time converted to MM:SS.mmm format
     lapinfo <- data.frame(lapnum=lap[1,1], seconds=lt, minutes=sprintf("%d:%02d.%03d", lt%/%60, round(lt%%60), (1000*lt)%%1000),
                           # speed and power
@@ -56,6 +56,11 @@ ui <- fluidPage(
     leafletOutput("map", height=600)
 )
 
+# colur the circles
+accelcolor <- function(accel) {
+    ifelse(accel > 0, "red", "blue")
+}
+
 # Define server logic for viewing trackfile
 server <- function(input, output) {
     output$map <- renderLeaflet({
@@ -66,8 +71,10 @@ server <- function(input, output) {
         tfl <- tf[tf$Lap %in% lapc,]
         leaflet(tfl) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-            addCircles(lng=tfl$Longitude..decimal.[tfl[7]>0], lat=tfl$Latitude..decimal.[tfl[7]>0], radius=2, color="red") %>%
-            addCircles(lng=tfl$Longitude..decimal.[tfl[7]<=0], lat=tfl$Latitude..decimal.[tfl[7]<=0], radius=2, color="blue")
+            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=6) %>%
+            addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=2,
+                       color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
+                       label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
     })
         
     output$sumtab <- renderDT({
