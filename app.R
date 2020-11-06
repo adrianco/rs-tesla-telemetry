@@ -82,6 +82,8 @@ server <- function(input, output) {
     })
 }
 
-# Run the application 
+# Run the application
+# read in locations of turn apexes for a specific track - default Laguna Seca
+turns <- read.csv("turns.csv",row.names=1)
 ptf(file.choose())
 shinyApp(ui = ui, server = server)
