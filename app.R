@@ -15,8 +15,7 @@ library(DT)
 ptf <- function(trackfile) {
     tf <<- read.csv(trackfile)
     if (length(names(tf)) != 29) {
-        warning("Expected 29 columns in tesla telemetry file")
-        return()
+        stop("Expected 29 columns in tesla telemetry file")
     }
     #Remove lap 0
     tf <<- tf[(tf[,1]!=0),]
@@ -57,20 +56,22 @@ ui <- fluidPage(
     leafletOutput("map")
 )
 
-# Define server logic required to draw a histogram
+# Define server logic for viewing trackfile
 server <- function(input, output) {
     output$map <- renderLeaflet({
         lapc <- input$sumtab_rows_selected
         if (length(lapc) == 0) {
             lapc <- 1:length(laps)
         }
-        leaflet(tf[tf$Lap %in% lapc,]) %>% addTiles() %>%
+        tfl <- tf[tf$Lap %in% lapc,]
+        leaflet(tfl) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-            addPolylines(lng= ~Longitude..decimal., lat= ~Latitude..decimal.)
+            addCircles(lng=tfl$Longitude..decimal.[tfl[7]>0], lat=tfl$Latitude..decimal.[tfl[7]>0], radius=2, color="red") %>%
+            addCircles(lng=tfl$Longitude..decimal.[tfl[7]<=0], lat=tfl$Latitude..decimal.[tfl[7]<=0], radius=2, color="blue")
     })
         
     output$sumtab <- renderDT({
-        datatable(lapdf, selection=list(selected=2))
+        datatable(lapdf, selection=list(selected=1, mode='single'))
     })
 }
 
