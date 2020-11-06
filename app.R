@@ -10,15 +10,18 @@
 library(shiny)
 library(leaflet)
 library(DT)
+library(collapse)
 
 # process a telemetry file
 ptf <- function(trackfile) {
-    tf <<- read.csv(trackfile)
-    if (length(names(tf)) != 29) {
+    rtf <<- read.csv(trackfile)
+    if (length(names(rtf)) != 29) {
         stop("Expected 29 columns in tesla telemetry file")
     }
-    #Remove lap 0
-    tf <<- tf[(tf[,1]!=0),]
+    # collapse data by averaging repeated location points, reduces size to about a fifth
+    tf <<- collapv(rtf, c(1,5,4))
+    # remove lap 0
+    tf <<- rtf[(rtf[,1]!=0),]
     # create list of separate laps
     laps <<- split(tf, tf[,1])
     lapl <- lapply(laps, plap)
@@ -33,7 +36,7 @@ plap <- function(lap) {
     KW <- max(lap[,13])
     gms <<- 9.80665
     # lap number, time in seconds, time converted to MM:SS.mmm format
-    lapinfo <- data.frame(lapnum=lap[1,1], seconds=lt, minutes=sprintf("%d:%02d.%03d", lt%/%60, round(lt%%60), (1000*lt)%%1000),
+    lapinfo <- data.frame(lapnum=lap[1,1], seconds=lt, minutes=sprintf("%d:%02d.%03d", lt%/%60, round(lt%%60), round((1000*lt)%%1000)),
                           # speed and power
                           maxMph=max(lap[,3]), maxKW=round(KW), maxBhp=round(KW/0.745699872),
                           # acceleration and braking
@@ -71,8 +74,8 @@ server <- function(input, output) {
         tfl <- tf[tf$Lap %in% lapc,]
         leaflet(tfl) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=6) %>%
-            addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=2,
+            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
+            addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                        color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                        label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
     })
