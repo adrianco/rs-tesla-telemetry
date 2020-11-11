@@ -53,10 +53,25 @@ plap <- function(lap) {
 # Define UI for application to summarize Tesla track data
 ui <- fluidPage(
     # Application title
-    titlePanel("Shiny Tesla Telemetry Analyzer"),
-    DTOutput("sumtab"),
-    # Show a map of the track
-    leafletOutput("map", height=600)
+    sidebarLayout(
+        sidebarPanel(
+            titlePanel("Shiny Tesla Telemetry Analyzer"),
+            tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry"),
+        ),
+        mainPanel(
+            tabsetPanel(
+                tabPanel("Laps",
+                        titlePanel("Pick a lap to show acceleration (red) and deceleration (blue) point by point"),
+                        # tabular summary of laps
+                        DTOutput("sumtab"),
+                        # Show a map of the track with lap highlighted
+                        leafletOutput("map", height=600)
+                ),
+                tabPanel("Plots"),
+                tabPanel("Turns")
+            )
+        )
+    )
 )
 
 # colur the circles
