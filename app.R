@@ -57,11 +57,13 @@ ui <- fluidPage(
         sidebarPanel(
             titlePanel("Shiny Tesla Telemetry Analyzer"),
             tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry"),
+            h3("Lap Picker"),
+            DTOutput("laplist")
         ),
         mainPanel(
             tabsetPanel(
                 tabPanel("Laps",
-                        titlePanel("Pick a lap to show acceleration (red) and deceleration (blue) point by point"),
+                        h3("Acceleration (red) and deceleration (blue) point by point, click for speed and lateral G"),
                         # tabular summary of laps
                         DTOutput("sumtab"),
                         # Show a map of the track with lap highlighted
@@ -81,6 +83,31 @@ accelcolor <- function(accel) {
 
 # Define server logic for viewing trackfile
 server <- function(input, output) {
+    # sidebar lap selector
+    output$laplist <- renderDT({
+        datatable(lapdf[,c(3,4,6,7,9)], selection=list(selected=1, mode='multiple'),
+                  options=list(pageLength=20, ordering=FALSE, initComplete=htmlwidgets::JS(
+                      "function(settings, json) {",
+                      "$(this.api().table().container()).css({'font-size': '80%'});",
+                      "}")
+                  )
+        )       
+    })
+    
+    # Speed tab table and map
+    output$sumtab <- renderDT({
+        #if no rows are selected all are used
+        rows<-input$laplist_rows_selected
+        if (length(rows)==0) rows<-1:length(lapdf$lap)
+        datatable(lapdf[rows,1:11], selection=list(selected=input$laplist_rows_selected, mode='none'),
+                  options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
+                      "function(settings, json) {",
+                      "$(this.api().table().container()).css({'font-size': '80%'});",
+                      "}")
+                  )
+        )
+    })
+    
     output$map <- renderLeaflet({
         lapc <- input$sumtab_rows_selected
         if (length(lapc) == 0) {
@@ -94,10 +121,7 @@ server <- function(input, output) {
                        color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                        label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
     })
-        
-    output$sumtab <- renderDT({
-        datatable(lapdf, selection=list(selected=1, mode='single'))
-    })
+
 }
 
 # Run the application
