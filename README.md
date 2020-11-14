@@ -44,7 +44,7 @@ Here are the names after reading into R
 [29] "Tire.Slip.Rear.Right....est.."  
 ```
  
-The app also persists a list of laps, with the structure shown above, and a summary data frame lapdf as shown below.
+The app also persists a list of laps, with the structure shown above, that have been collapsed so that each GPS point has averaged data (6-10 points) to reduce the size, and a summary data frame lapdf as shown below.
 
 ```
 > names(lapdf)
@@ -54,6 +54,7 @@ The app also persists a list of laps, with the structure shown above, and a summ
 [13] "maxFrontInverter" "maxRearInverter"  "maxBatteryTemp"  
  ```
  
- The code drops lap 0 (driving in the hot pit), splits the rest of the data into laps, and calls plap on each to generate a row for each lap in the data frame
+ The code drops lap 0 (driving in the hot pit), splits the rest of the data into laps, and calls plap on each to generate a row for each lap in the data frame. This is summarized in two tabs, one for speed and the other for temperature, and allows you to pick a lap to show on the map.
  
  ![Screenshot](rs-tesla-telemetry-screenshot.png)
+ ![Screenshot](rs-tesla-telemetry-screenshot-temp.png)
