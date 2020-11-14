@@ -54,7 +54,8 @@ The app also persists a list of laps, with the structure shown above, that have 
 [13] "maxFrontInverter" "maxRearInverter"  "maxBatteryTemp"  
  ```
  
- The code drops lap 0 (driving in the hot pit), splits the rest of the data into laps, and calls plap on each to generate a row for each lap in the data frame. This is summarized in two tabs, one for speed and the other for temperature, and allows you to pick a lap to show on the map.
+ The code drops lap 0 (driving in the hot pit), splits the rest of the data into laps, and calls plap on each to generate a row for each lap in the data frame. This is summarized in two tabs, one for speed and the other for temperature, and allows you to pick a lap to show on the map. More tabs coming...
  
  ![Screenshot](rs-tesla-telemetry-screenshot.png)
+ 
  ![Screenshot](rs-tesla-telemetry-screenshot-temp.png)
