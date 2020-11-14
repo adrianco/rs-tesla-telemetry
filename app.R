@@ -12,6 +12,11 @@ library(leaflet)
 library(DT)
 library(collapse)
 
+# initialization section
+# read in locations of turn apexes for a specific track - default Laguna Seca
+turns <- read.csv("turns.csv",row.names=1)
+filename <- file.choose()
+
 # process a telemetry file
 ptf <- function(trackfile) {
     rtf <<- read.csv(trackfile)
@@ -59,7 +64,8 @@ ui <- fluidPage(
         sidebarPanel(
             titlePanel("Shiny Tesla Telemetry Analyzer"),
             tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry"),
-            h3("Pick laps to analyze"),
+            h4("Pick laps to analyze from:"),
+            p(filename),
             DTOutput("laplist")
         ),
         mainPanel(
@@ -78,7 +84,13 @@ ui <- fluidPage(
                          # Show a map of the track with lap highlighted
                          leafletOutput("tempmap", height=600)
                 ),
-                tabPanel("Plots"),
+                tabPanel("Plots",
+                         h3("Comparison plots"),
+                         # temperature oriented summary of selected laps
+                         DTOutput("plottab"),
+                         plotOutput("speedplot", height='600px'),
+                         #plotOutput("tempplot")
+                ),
                 tabPanel("Turns")
             )
         )
@@ -88,6 +100,12 @@ ui <- fluidPage(
 # colur the circles
 accelcolor <- function(accel) {
     ifelse(accel > 0, "red", "blue")
+}
+
+# color cycle for plots
+colpal <- function(x) {
+    # get nine different colors and pick one
+    palette.colors(9)[x%%9]
 }
 
 # Define server logic for viewing trackfile
@@ -100,7 +118,7 @@ server <- function(input, output) {
                       "$(this.api().table().container()).css({'font-size': '80%'});",
                       "}")
                   )
-        )       
+        ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
     # Speed tab table and map
@@ -111,7 +129,7 @@ server <- function(input, output) {
                       "$(this.api().table().container()).css({'font-size': '80%'});",
                       "}")
                   )
-        )
+        ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
     output$map <- renderLeaflet({
@@ -133,7 +151,7 @@ server <- function(input, output) {
                       "$(this.api().table().container()).css({'font-size': '80%'});",
                       "}")
                   )
-        )
+        ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
     # colour the circles
@@ -157,10 +175,33 @@ server <- function(input, output) {
             )
         }
     })
-}
+    
+ 
+    
+    output$plottab <- renderDT({
+        datatable(lapdf[input$laplist_rows_selected, c(3,4,5,7,8,9,12,15)], selection=list(selected=matrix(c(1,2),1), mode='multiple', target='cell'),
+                  options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
+                      "function(settings, json) {",
+                      "$(this.api().table().container()).css({'font-size': '80%'});",
+                      "}")
+                  )
+        ) %>% formatStyle(1, target="row", fontWeight="bold", color = colpal(input$plottab_rows_selected))
+    })
+    
+    output$speedplot <- renderPlot({
+        if (length(input$laplist_rows_selected) > 0 && length(input$plottab_cells_selected) > 0) {
+            lap <- laps[[input$laplist_rows_selected[input$plottab_cells_selected[1,1]]]]
+            plot(lap[,c(2,input$plottab_cells_selected[1,2])],type='l')
+        }
+    })
+    
+    output$tempplot <- renderPlot({
+        if (length(input$laplist_rows_selected) > 0 && length(input$plottab_cells_selected) > 0) {
+            lap <- laps[[input$laplist_rows_selected[input$plottab_cells_selected[1,1]]]]
+            plot(lap[,c(2,25)],type='l')
+        }
+    })}
 
 # Run the application
-# read in locations of turn apexes for a specific track - default Laguna Seca
-turns <- read.csv("turns.csv",row.names=1)
-ptf(file.choose())
+ptf(filename)
 shinyApp(ui = ui, server = server)
