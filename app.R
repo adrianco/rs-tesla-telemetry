@@ -15,7 +15,12 @@ library(collapse)
 # initialization section
 # read in locations of turn apexes for a specific track - default Laguna Seca
 turns <- read.csv("turns.csv",row.names=1)
-filename <- file.choose()
+# if started from the command line with 'Rscript app.R filename', use the filename given
+if (length(commandArgs(TRUE)) > 0) {
+    filename <- commandArgs(TRUE)
+} else {
+    filename <- file.choose()
+}
 
 # process a telemetry file
 ptf <- function(trackfile) {
