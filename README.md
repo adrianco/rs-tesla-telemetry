@@ -60,7 +60,9 @@ The app also persists a list of laps, with the structure shown above, that have 
  
  ![Screenshot](rs-tesla-telemetry-screenshot-temp.png)
  
+ ![Screenshot](rs-tesla-telemetry-screenshot-plots.png)
+ 
  ![Screenshot](rs-tesla-telemetry-screenshot-temp2.png)
  
- ![Screenshot](rs-tesla-telemetry-screenshot-plots.png)
+ 
  
