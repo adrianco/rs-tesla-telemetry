@@ -3,7 +3,33 @@ RStudio Shiny viewer for Tesla Telemetry Track Mode files
 
 Files are saved to the USB data logger port that is also used for Sentry videos. There's a silent video file of the track mode session, and a CSV format file named telemetry-v1-date-time.csv, there are 29 columns of data.
 
-Running the app from RStudio, it first opens a file chooser, so the telemetry file needs to be on the same machine. After that is read it starts the user interface. This shows a summary of the performance data lap by lap, and a map view of the selected laps.
+Running the app from RStudio, it first opens a file chooser, so the telemetry file needs to be on the same machine. After that is read it starts the user interface. This shows a summary of the performance data lap by lap, and tabs with a map view of the selected laps, and comparison plots.
+
+To run the app from the command line without RStudio give the track file path like this:
+```
+% Rscript app.R /Users/anc/Dropbox/cars/TeslaTrackMode/telemetry-v1-2020-10-09-11_56_58.csv
+
+Attaching package: ‘DT’
+
+The following objects are masked from ‘package:shiny’:
+
+    dataTableOutput, renderDataTable
+
+collapse 1.4.0, see ?`collapse-package` or ?`collapse-documentation`
+Note: stats::D  ->  D.expression, D.call, D.name
+
+Attaching package: ‘collapse’
+
+The following object is masked from ‘package:stats’:
+
+    D
+
+
+Listening on http://127.0.0.1:6344
+```
+Then navigate to the URL and port shown on your machine using a web browser. Use ^C to stop the Rscript server.
+If anything goes wrong, a log of the execution is written to app.Rout.
+
 
 This is the header line for the csv
 ```
