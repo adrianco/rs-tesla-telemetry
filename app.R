@@ -13,14 +13,41 @@ library(DT)
 library(collapse)
 
 # initialization section
-# read in locations of turn apexes for a specific track - default Laguna Seca
-turns <- read.csv("turns.csv",row.names=1)
 # if started from the command line with 'Rscript app.R filename', use the filename given
 if (length(commandArgs(TRUE)) > 0) {
     filename <- commandArgs(TRUE)
 } else {
     filename <- file.choose()
 }
+# Users username path... telemetry-v1-2020-10-09-11_56_58.csv
+filepath <- unlist(strsplit(filename, .Platform$file.sep)) # separate using / or \
+telemetry <- filepath[length(filepath)] # telemetry-v1-2020-10-09-11_56_58.csv
+telemetrydir <- paste(filepath[-length(filepath)], collapse=.Platform$file.sep)
+telemetrysplit <- unlist(strsplit(telemetry, "-|_|[.]")) # telemetry v1 2020 10 09 11 56 58 csv
+telemetrydate <- paste(telemetrysplit[3:5], collapse='-') # "2020-10-09"
+telemetrytime <- paste(telemetrysplit[6:8], collapse=':') # "11:56:58"
+# construct filename base for additional export files
+namebase <- sprintf("-v1-%s-%s-%s-%s_%s_%s.csv", telemetrysplit[3], telemetrysplit[4], telemetrysplit[5],
+                    telemetrysplit[6], telemetrysplit[7], telemetrysplit[8])
+# metadata saved and loaded matching each telemetry file
+metadata <- paste0("metadata", namebase) # metadata-v1-2020-10-09-11_56_58.csv
+
+# Metadata Choices
+other <- "Other-see comments"
+SessionTypeChoice <- c("Track Day","Autocross","Race","Qualifying","Time Trial","Dragstrip","Drift")
+SessionLevelChoice <- c("Free Passing","Restricted Passing","Point-by","Novice","Solo")
+DriverExperienceChoice <- c("Advanced", "Intermediate", "Novice (less than 5 track days)", "First Time", "Instructor")
+CourseConditionChoice <- c("Dry Sunny", "Dry Overcast", "Damp", "Wet")
+ModelChoice <- c("3","Y")
+SpecificationChoice <- c("Dual Motor Performance", "Dual Motor Long Range", "Long Range", "Mid Range", "Standard Range")
+WheelChoice <- c("Sport 20", "ZeroG 20", "Sport 19", "PowerSports 19", "Aero 18", other)
+TireSizeChoice <- c("235/35-20", "235/40-19", "235/45-18", other)
+TireTypeChoice <- c("Michelin Pilot Sport 4S-20", "Continental Procontact RX-19", "Michelin MXM4-18", other)
+BrakePadChoice <- c("Stock", "Carbotech RP2", "Racing Brake XT910", "Racing Brake XT970", "Unpluigged Performance Street/Track", "Unplugged Performance Track Only", other)
+BrakeRotorChoice <- c("Stock", "Racing Brake", "Mountain Pass Performance", other)
+BrakeCaliperChoice <- c("Performance", "Standard", other)
+BrakeFluidChoice <- c("Stock", "Motul RBF600", "Castrol SRF", other)
+CoiloverChoice <- c("Stock", "Motion Control Systems Eibach", "Unplugged Performance Ohlins", "Mountain Pass Performance", other)
 
 # process a telemetry file
 ptf <- function(trackfile) {
@@ -56,6 +83,24 @@ ptf <- function(trackfile) {
     laps <<- laps[o]
     lapdf <<- lapdf[o,]
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
+    # read in locations of turn apexes for a specific track, use rounded off location to identify
+    trackdir <<- paste0("tracks/", round(laps[[1]][1,4],1), ";", round(laps[[1]][1,5],1))
+    fn <- paste0(trackdir,"/turns.csv")
+    if (dir.exists(trackdir)) {
+        if (file.exists(fn)) {
+            turns <<- read.csv(fn,row.names=1)
+        } else {
+            turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
+        }
+    } else {
+        dir.create(trackdir)
+        file.create(fn)
+    }
+    mn <- file.path(telemetrydir, metadata)
+    if (file.exists(mn)) {
+        metadf <<- read.csv(mn)
+    }
+
 }
 
 # process a lap
@@ -117,13 +162,66 @@ ui <- fluidPage(
                          #plotOutput("tempplot")
                 ),
                 tabPanel("Turns"),
-                tabPanel("Metadata")
-            )
-        )
-    )
-)
+                tabPanel("Metadata",
+                        h3("Metadata about the session"),
+                        splitLayout(cellWidths=c("25%","75%"),
+                            actionButton("save", "Save", class = "btn-primary"),
+                            textAreaInput("comments", "Comments and customizations", "Excuses for not being faster..."),
+                            tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
+                        splitLayout(cellWidths="25%",
+                             verbatimTextOutput("telemetry", TRUE),
+                             verbatimTextOutput("date", TRUE),
+                             verbatimTextOutput("time", TRUE),
+                             verbatimTextOutput("latlong", TRUE)),
+                        hr(),
+                        splitLayout(cellWidths="25%",
+                             textInput("track", "Track Name", ""),
+                             textInput("drivername", "Driver Name", ""),
+                             numericInput("carnumber", "Car Number", 44, 1), #Hamilton default
+                             numericInput("passengers", "Passengers", 0, 0)),
+                        splitLayout(cellWidths="25%",
+                             p("Track mode settings"),
+                             numericInput("handlingbalance", "Handling Balance", 50),
+                             numericInput("stabilityassist", "Stability Assist", 0),
+                             numericInput("regenerativebraking", "Regenerative Braking", 100)),
+                        splitLayout(cellWidths="25%",
+                             textInput("sessionorganizer", "Session Organizer", ""),
+                             selectInput("driverexperience", "Driver Experience", DriverExperienceChoice),
+                             selectInput("sessiontype", "Session Type", SessionTypeChoice),
+                             selectInput("sessionlevel", "Session Level", SessionLevelChoice)),
+                        splitLayout(cellWidths="25%",
+                             selectInput("units", "Temperature Units", c("Fahrenheit", "Celsius")),
+                             numericInput("ambienttemperature", "Ambient Temperature", 0),
+                             numericInput("surfacetemperature", "Track Surface Temperature", 0),
+                             selectInput("coursecondition", "Course Condition", CourseConditionChoice)),
+                        splitLayout(cellWidths="25%",
+                             selectInput("model", "Model", ModelChoice),
+                             selectInput("specification", "Specification", SpecificationChoice),
+                             numericInput("modelyear", "Model Year", 2020, 2018),
+                             textInput("color", "Color", "Blue")),
+                        splitLayout(cellWidths="25%",
+                             selectInput("wheel", "Wheel", WheelChoice),
+                             selectInput("tiresize", "Tire Size", TireSizeChoice),
+                             selectInput("tiretype", "Tire Type", TireTypeChoice),
+                             numericInput("coldpressure", "Cold Pressure", 40)),
+                        splitLayout(cellWidths="25%",
+                             selectInput("brakepad", "Brake Pad", BrakePadChoice),
+                             selectInput("brakerotor", "Brake Rotor", BrakeRotorChoice),
+                             selectInput("brakecaliper", "Brake Caliper", BrakeCaliperChoice),
+                             selectInput("brakefluid", "Brake Fluid", BrakeFluidChoice)),
+                        splitLayout(cellWidths="25%",
+                             numericInput("frontcamber", "Front Camber (-1.0 to -0.1 std)", -1),
+                             numericInput("rearcamber", "Rear Camber (-2.0 to 0.0 std)", -2),
+                             selectInput("coilovers", "Coilovers", CoiloverChoice),
+                             textInput("controlarms", "Control Arms", "Stock"))
+                    ) #tabpanel
+                ) # tabsetpanel
+            ) # mainpanel
+        ) # sidebarlayout
+    ) # fluidpage
 
-# colur the circles
+
+# color the circles
 accelcolor <- function(accel) {
     ifelse(accel > 0, "red", "blue")
 }
@@ -245,6 +343,35 @@ server <- function(input, output) {
             }
         }
     })
+    
+    # Metadata tab
+    fieldsAll <- c("telemetry", "date", "time", "latlong",
+                   "track", "drivername", "carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
+                   "sessionorganizer", "driverexperience", "sessiontype", "sessionlevel", "units", "ambienttemperature",
+                   "surfacetemperature", "coursecondition", "model", "specification", "modelyear", "color", "wheel",
+                   "tiresize", "tyretype", "coldpressure", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "frontcamber",
+                   "rearcamber", "coilovers", "controlarms", "customizations")
+
+    formData <- reactive({
+        data <- sapply(fieldsAll, function(x) input[[x]])
+        data <- c(data, timestamp = as.integer(Sys.time()))
+        data <- t(data)
+        data
+    })
+    
+    saveData <- function(data) {
+        write.csv(x = data, file = file.path(telemetrydir, metadata),
+                  row.names = FALSE, quote = TRUE)
+    }
+    
+    # action to take when save button is pressed
+    observeEvent(input$save, {
+        saveData(formData())
+    })
+    output$telemetry <- renderText({ telemetry })
+    output$date <- renderText({ paste("Date:", telemetrydate) })
+    output$time <- renderText({ paste("Time:", telemetrytime) })
+    output$latlong <- renderText({ paste0("Lat,Long: ", laps[[1]][1,4], ",",laps[[1]][1,5]) })
 } #end of server
 
 # Run the application
