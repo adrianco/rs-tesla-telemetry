@@ -19,6 +19,7 @@ if (length(commandArgs(TRUE)) > 0) {
 } else {
     filename <- file.choose()
 }
+# Generate all the directory and file paths needed for this run, extract date/time from filename
 # Users username path... telemetry-v1-2020-10-09-11_56_58.csv
 filepath <- unlist(strsplit(filename, .Platform$file.sep)) # separate using / or \
 telemetry <- filepath[length(filepath)] # telemetry-v1-2020-10-09-11_56_58.csv
@@ -83,6 +84,7 @@ ptf <- function(trackfile) {
     laps <<- laps[o]
     lapdf <<- lapdf[o,]
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
+    telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5])
     # read in locations of turn apexes for a specific track, use rounded off location to identify
     trackdir <<- paste0("tracks/", round(laps[[1]][1,4],1), ";", round(laps[[1]][1,5],1))
     fn <- paste0(trackdir,"/turns.csv")
@@ -99,8 +101,9 @@ ptf <- function(trackfile) {
     mn <- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
         metadf <<- read.csv(mn)
+    } else {
+        metadf <<- NULL
     }
-
 }
 
 # process a lap
@@ -164,16 +167,18 @@ ui <- fluidPage(
                 tabPanel("Turns"),
                 tabPanel("Metadata",
                         h3("Metadata about the session"),
-                        splitLayout(cellWidths=c("25%","75%"),
+                        splitLayout(cellWidths=c("25%"),
                             actionButton("save", "Save", class = "btn-primary"),
-                            textAreaInput("comments", "Comments and customizations", "Excuses for not being faster..."),
+                            verbatimTextOutput("metadatafile", TRUE),
                             tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
+                        hr(), # Output section
                         splitLayout(cellWidths="25%",
                              verbatimTextOutput("telemetry", TRUE),
                              verbatimTextOutput("date", TRUE),
                              verbatimTextOutput("time", TRUE),
                              verbatimTextOutput("latlong", TRUE)),
-                        hr(),
+                        hr(), # Input section
+                        textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster..."),
                         splitLayout(cellWidths="25%",
                              textInput("track", "Track Name", ""),
                              textInput("drivername", "Driver Name", ""),
@@ -233,7 +238,7 @@ colpal <- function(x) {
 }
 
 # Define server logic for viewing trackfile
-server <- function(input, output) {
+server <- function(input, output, session) {
     # sidebar lap selector
     output$laplist <- renderDT({
         datatable(lapdf[,c(3,4,6,7,9)], selection=list(selected=1, mode='multiple'),
@@ -345,33 +350,49 @@ server <- function(input, output) {
     })
     
     # Metadata tab
-    fieldsAll <- c("telemetry", "date", "time", "latlong",
-                   "track", "drivername", "carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
-                   "sessionorganizer", "driverexperience", "sessiontype", "sessionlevel", "units", "ambienttemperature",
-                   "surfacetemperature", "coursecondition", "model", "specification", "modelyear", "color", "wheel",
-                   "tiresize", "tyretype", "coldpressure", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "frontcamber",
-                   "rearcamber", "coilovers", "controlarms", "customizations")
-
+    # input$ fields to save/restore in metadata
+    textFieldsInput <- c("track", "drivername", "sessionorganizer", "color", "controlarms")
+    numericFieldsInput <- c("carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
+                         "ambienttemperature", "surfacetemperature", "modelyear", "coldpressure", "frontcamber",
+                         "rearcamber")
+    selectFieldsInput <- c("driverexperience", "sessiontype", "sessionlevel", "units",
+                         "coursecondition", "model", "specification", "color", "wheel",
+                         "tiresize", "tyretype", "coldpressure", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "coilovers")
+    textAreaFieldsInput <- "comments"
+    fieldsInput <- c(numericFieldsInput, textFieldsInput, selectFieldsInput, textAreaFieldsInput)
+    # build a list of name=value pairs and transpose to columns
     formData <- reactive({
-        data <- sapply(fieldsAll, function(x) input[[x]])
-        data <- c(data, timestamp = as.integer(Sys.time()))
+        data <- sapply(fieldsInput, function(x) input[[x]])
+        data <- c(telemetry=telemetry, telemetrydate=telemetrydate, telemetrytime=telemetrytime, telemetrylatlong=telemetrylatlong,
+                  data, timestamp = as.integer(Sys.time()))
         data <- t(data)
         data
     })
     
+    # save the metadata to the same directory as the telemetry file, and update the UI to confirm
     saveData <- function(data) {
         write.csv(x = data, file = file.path(telemetrydir, metadata),
                   row.names = FALSE, quote = TRUE)
+        output$metadatafile <- renderText({ metadata })
     }
     
     # action to take when save button is pressed
     observeEvent(input$save, {
         saveData(formData())
     })
+    
+    # fixed output values added to metadata file
     output$telemetry <- renderText({ telemetry })
     output$date <- renderText({ paste("Date:", telemetrydate) })
     output$time <- renderText({ paste("Time:", telemetrytime) })
-    output$latlong <- renderText({ paste0("Lat,Long: ", laps[[1]][1,4], ",",laps[[1]][1,5]) })
+    output$latlong <- renderText({ paste("Lat;Long:", telemetrylatlong) })
+    # put any values that were read at startup back into the display
+    if (!is.null(metadf)) {
+        sapply(textFieldsInput, function(x) updateTextInput(session, x, value=metadf[1,x]))
+        sapply(numericFieldsInput, function(x) updateNumericInput(session, x, value=metadf[1,x]))
+        sapply(selectFieldsInput, function(x) updateSelectInput(session, x, selected=metadf[1,x]))
+        sapply(textAreaFieldsInput, function(x) updateTextAreaInput(session, x, value=metadf[1,x]))
+    }
 } #end of server
 
 # Run the application
