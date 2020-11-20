@@ -74,6 +74,12 @@ ptf <- function(trackfile) {
             ((max(l[,5]) - min(l[,5]))/longspan > 0.95) &&
             (abs(l[1,4] - l[ln,4]) < 0.0001) && (abs(l[1,5] - l[ln,5]) < 0.0001)) {
                 lapcnt <<- lapcnt+1
+                # add distance as a derived column for plotting instead of time
+                # difference time from time dropping the first one and duplicating last in the column
+                # multiply time deltas by speed and convert from milliseconds to hours to get miles
+                # save as cululative sum of deltas to get distance in the lap
+                d <- cumsum(l[,3]*(c(l[-1,2],l[length(l[,2]),2])-l[,2])/3600000) # distance along track
+                l <- cbind(l, Distance=d)
                 laps[[lapcnt]] <<- l # only append good laps to the global list
         }
     }
@@ -333,13 +339,13 @@ server <- function(input, output, session) {
                 lap <- laps[[input$laplist_rows_selected[cs[i,1]]]]
                 if (i==1) {
                     # create the plot, pick axes limits etc. column 2 is time in milliseconds
-                    plot(lap[,2]/1000.0, lap[,unpick(cs[i,2])],type='l',col=i,
-                         xlab="seconds", ylab=names(lap)[unpick(cs[i,2])],
+                    plot(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i,
+                         xlab="Miles", ylab=names(lap)[unpick(cs[i,2])],
                          # ordered list of cells to plot, lookup which rows in laplist, and lap numbers from lapdf column 1
                          main="")
                 } else {
                     # add more lines to the plot
-                    lines(lap[,2]/1000.0, lap[,unpick(cs[i,2])],type='l',col=i)
+                    lines(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i)
                 }
                 # label the lap at the first data point, in the same color, with the right lap number
                 text(x=0, y=lap[1,unpick(cs[i,2])], labels=paste("Lap", lapdf[input$laplist_rows_selected[cs[i,1]],1],

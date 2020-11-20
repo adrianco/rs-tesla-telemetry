@@ -3,7 +3,7 @@ RStudio Shiny viewer for Tesla Telemetry Track Mode files
 
 Files are saved to the USB data logger port that is also used for Sentry videos. There's a silent video file of the track mode session, and a CSV format file named telemetry-v1-date-time.csv, there are 29 columns of data.
 
-Running the app from RStudio, it first opens a file chooser, so the telemetry file needs to be on the same machine. After that is read it starts the user interface. This shows a summary of the performance data lap by lap, and tabs with a map view of the selected laps, and comparison plots. Metadata about the session can be entered, and can be saved to a metadata file named and located the same as the telemetry file, which is loaded if it exists at startup.
+Running the app from RStudio, it first opens a file chooser, so the telemetry file needs to be on the same machine. After that is read it starts the user interface. This removes incomplete laps, sorts by fastest lap time, shows a summary of the performance data lap by lap, and summary tabs with a map view of the selected laps, and comparison plots of selected metrics vs. distance (rather than time, to align better). Metadata about the session can be entered, and can be saved to a metadata file named and located the same as the telemetry file, which is loaded if it exists at startup.
 
 To run the app from the command line without RStudio give the track file path like this:
 ```
