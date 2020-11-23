@@ -50,6 +50,9 @@ BrakeCaliperChoice <- c("Performance", "Standard", other)
 BrakeFluidChoice <- c("Stock", "Motul RBF600", "Castrol SRF", other)
 CoiloverChoice <- c("Stock", "Motion Control Systems Eibach", "Unplugged Performance Ohlins", "Mountain Pass Performance", other)
 
+ylimits <<- c(0,0) # track the limits of the data across all selected sources
+xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
+
 # process a telemetry file
 ptf <- function(trackfile) {
     rtf <<- read.csv(trackfile)
@@ -165,10 +168,16 @@ ui <- fluidPage(
                 ),
                 tabPanel("Plots",
                          h3("Comparison plots"),
-                         # temperature oriented summary of selected laps
                          DTOutput("plottab"),
-                         plotOutput("speedplot", height='600px'),
-                         #plotOutput("tempplot")
+                         hr(),
+                         splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
+                            actionButton("zoom_out", "Zoom Out", class="btn-primary"),
+                            actionButton("reset_plot", "Reset Axes", class="btn-primary"),
+                            h4(" Select and move region with mouse and double-click to zoom in")
+                         ),
+                         plotOutput("speedplot", height='700px',
+                                    dblclick = "plot_dblclick",
+                                    brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE)),
                 ),
                 tabPanel("Turns"),
                 tabPanel("Metadata",
@@ -331,18 +340,62 @@ server <- function(input, output, session) {
         ) %>% formatStyle(1, target="row", fontWeight="bold") #, color = colpal(input$laplist_rows_selected))
     })
     
+    output$plot_domain <- renderPrint({
+        cat("Domain:\n")
+        str(input$plot_brush$domain)
+    })
+    output$plot_range <- renderPrint({
+        cat("Range\n")
+        str(input$plot_brush$range)
+    })
+    output$plot_brushinfo <- renderPrint({
+        cat("Brush coordinates:\n")
+        str(input$plot_brush$coords_img)
+    })
+    
+    plot.range <- reactiveValues(x = NULL, y = NULL)
+    
+    observeEvent(input$plot_dblclick, {
+        brush <- input$plot_brush
+        if (!is.null(brush)) {
+            plot.range$x <- c(brush$xmin, brush$xmax)
+            plot.range$y <- c(brush$ymin, brush$ymax)
+        } else {
+            plot.range$x <- NULL
+            plot.range$y <- NULL
+        }
+    })
+    
+    # set axes lmits to the over-all data limits
+    observeEvent(input$reset_plot, {
+        plot.range$x <- xlimits 
+        plot.range$y <- ylimits
+    })
+    
+    # double the size of the zoomed area
+    observeEvent(input$zoom_out, {
+        xspan <- plot.range$x[2] - plot.range$x[1]
+        yspan <- plot.range$y[2] - plot.range$y[1]
+        plot.range$x <- c(plot.range$x[1]-xspan/2, plot.range$x[2]+xspan/2)
+        plot.range$y <- c(plot.range$y[1]-yspan/2, plot.range$y[2]+yspan/2)
+    })
+    
     output$speedplot <- renderPlot({
         cs <<- input$plottab_cells_selected #matrix of the lap [,1] and value [,2] to plot in order
+        ylimits <<- c(0,0) # track the limits of the data across all selected sources
+        xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
         if (length(input$laplist_rows_selected) > 0 && length(cs) > 0) {
             for (i in 1:length(cs[,1])) {
                 # cs[i,1] is the row in the table, index into the selected rows to find which lap
                 lap <- laps[[input$laplist_rows_selected[cs[i,1]]]]
+                xlimits <<- c(min(xlimits[1], min(lap[,30])), max(xlimits[2], max(lap[,30])))
+                ylimits <<- c(min(ylimits[1], min(lap[,unpick(cs[i,2])])), max(ylimits[2], max(lap[,unpick(cs[i,2])])))
                 if (i==1) {
-                    # create the plot, pick axes limits etc. column 2 is time in milliseconds
+                    # create the plot, pick axes limits etc. column 2 is time in milliseconds, 30 is distance
                     plot(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i,
                          xlab="Miles", ylab=names(lap)[unpick(cs[i,2])],
                          # ordered list of cells to plot, lookup which rows in laplist, and lap numbers from lapdf column 1
-                         main="")
+                         main="", xlim = plot.range$x, ylim = plot.range$y)
                 } else {
                     # add more lines to the plot
                     lines(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i)
