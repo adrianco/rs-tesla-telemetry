@@ -1,5 +1,5 @@
 # rs-tesla-telemetry
-RStudio Shiny viewer for Tesla Telemetry Track Mode files
+RStudio Shiny viewer for Tesla Telemetry Track Mode files - personal spare time project.
 
 Files are saved to the USB data logger port that is also used for Sentry videos. There's a silent video file of the track mode session, and a CSV format file named telemetry-v1-date-time.csv, there are 29 columns of data.
 
