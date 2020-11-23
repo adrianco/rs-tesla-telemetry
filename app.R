@@ -54,7 +54,7 @@ ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 
 # process a telemetry file
-ptf <- function(trackfile) {
+ptf <- function(trackfile, all=FALSE) {
     rtf <<- read.csv(trackfile)
     if (length(names(rtf)) != 29) {
         stop("Expected 29 columns in tesla telemetry file")
@@ -73,7 +73,7 @@ ptf <- function(trackfile) {
         l <- tf[tf$Lap==i,] # get the data for one lap
         ln <- length(l$Lap) # get the number of data points
         # does the lap go all the way across the circuit and start end nearly the same place? 
-        if (((max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
+        if (all || ((max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
             ((max(l[,5]) - min(l[,5]))/longspan > 0.95) &&
             (abs(l[1,4] - l[ln,4]) < 0.0001) && (abs(l[1,5] - l[ln,5]) < 0.0001)) {
                 lapcnt <<- lapcnt+1
@@ -86,6 +86,8 @@ ptf <- function(trackfile) {
                 laps[[lapcnt]] <<- l # only append good laps to the global list
         }
     }
+    if (lapcnt==0)
+        return(FALSE)
     lapl <- lapply(laps, plap) # run plap against the list of laps and accumulate results
     lapdf <<- data.frame(t(sapply(lapl,c))) # convert to data frame - looked this up on stack overflow...
     # sort the list of laps and summary data to have fastest first
@@ -95,24 +97,25 @@ ptf <- function(trackfile) {
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
     telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5])
     # read in locations of turn apexes for a specific track, use rounded off location to identify
-    trackdir <<- paste0("tracks/", round(laps[[1]][1,4],1), ";", round(laps[[1]][1,5],1))
-    fn <- paste0(trackdir,"/turns.csv")
-    if (dir.exists(trackdir)) {
-        if (file.exists(fn)) {
-            turns <<- read.csv(fn,row.names=1)
-        } else {
-            turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
-        }
-    } else {
-        dir.create(trackdir)
-        file.create(fn)
-    }
+    #trackdir <<- paste0("tracks/", round(laps[[1]][1,4],1), ";", round(laps[[1]][1,5],1))
+    #fn <- paste0(trackdir,"/turns.csv")
+    #if (dir.exists(trackdir)) {
+    #    if (file.exists(fn)) {
+    #        turns <<- read.csv(fn,row.names=1)
+    #    } else {
+    #        turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
+    #    }
+    #} else {
+    #    dir.create(trackdir)
+    #    file.create(fn)
+    #}
     mn <- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
         metadf <<- read.csv(mn)
     } else {
         metadf <<- NULL
     }
+    return(TRUE)
 }
 
 # process a lap
@@ -455,5 +458,8 @@ server <- function(input, output, session) {
 } #end of server
 
 # Run the application
-ptf(filename)
+if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
+    if (!ptf(filename, all=TRUE)) # try again without filter
+        stop("No laps found in telemetry file")
+}
 shinyApp(ui = ui, server = server)
