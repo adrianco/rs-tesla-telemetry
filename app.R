@@ -11,6 +11,7 @@ library(shiny)
 library(leaflet)
 library(DT)
 library(collapse)
+library(olctools)
 
 # initialization section
 # if started from the command line with 'Rscript app.R filename', use the filename given
@@ -96,19 +97,20 @@ ptf <- function(trackfile, all=FALSE) {
     lapdf <<- lapdf[o,]
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
     telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5])
-    # read in locations of turn apexes for a specific track, use rounded off location to identify
-    #trackdir <<- paste0("tracks/", round(laps[[1]][1,4],1), ";", round(laps[[1]][1,5],1))
-    #fn <- paste0(trackdir,"/turns.csv")
-    #if (dir.exists(trackdir)) {
-    #    if (file.exists(fn)) {
-    #        turns <<- read.csv(fn,row.names=1)
-    #    } else {
-    #        turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
-    #    }
-    #} else {
-    #    dir.create(trackdir)
-    #    file.create(fn)
-    #}
+    # read in locations of turn apexes for a specific track, use rounded off open location code to identify
+    trackdir <<- paste0("tracks/", encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
+    fn <- paste0(trackdir,"/turns.csv")
+    if (dir.exists(trackdir)) {
+        if (file.exists(fn)) {
+            turns <<- read.csv(fn,row.names=1)
+        } else {
+            turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
+        }
+    } else {
+        dir.create(trackdir)
+        file.create(fn)
+        turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
+    }
     mn <- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
         metadf <<- read.csv(mn)
