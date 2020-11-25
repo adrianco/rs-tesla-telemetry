@@ -53,6 +53,7 @@ CoiloverChoice <- c("Stock", "Motion Control Systems Eibach", "Unplugged Perform
 
 ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
+turns <<- data.frame() # initialize and clear for ui reference
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
@@ -188,7 +189,7 @@ ui <- fluidPage(
                          h3("Turn by turn analysis"),
                          DTOutput("turnstab"),
                          splitLayout(cellWidths=c("20%"),
-                                     selectInput("select_turn", "Select Turn", row.names(turns))
+                                     selectInput("select_turn", "Select Turn", c("Whole Lap", row.names(turns)))
                          ),
                          splitLayout(cellWidths=c("15%","15%","50%"),
                                      actionButton("zoom_out_turn", "Zoom Out", class="btn-primary"),
