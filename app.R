@@ -98,8 +98,8 @@ ptf <- function(trackfile, all=FALSE) {
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
     telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5])
     # read in locations of turn apexes for a specific track, use rounded off open location code to identify
-    trackdir <<- paste0("tracks/", encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
-    fn <- paste0(trackdir,"/turns.csv")
+    trackdir <<- paste0("tracks", .Platform$file.sep, encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
+    fn <- paste0(trackdir, .Platform$file.sep, "turns.csv")
     if (dir.exists(trackdir)) {
         if (file.exists(fn)) {
             turns <<- read.csv(fn,row.names=1)
