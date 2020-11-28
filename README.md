@@ -30,6 +30,8 @@ Listening on http://127.0.0.1:6344
 Then navigate to the URL and port shown on your machine using a web browser. Use ^C to stop the Rscript server.
 If anything goes wrong, a log of the execution is written to app.Rout.
 
+On MacOS, you can use $ zsh runme.sh /Users/anc/Dropbox/cars/TeslaTrackMode/telemetry-v1-2020-10-09-11_56_58.csv which will open the browser for you.
+
 
 This is the header line for the csv
 ```
