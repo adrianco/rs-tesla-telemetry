@@ -32,6 +32,7 @@ If anything goes wrong, a log of the execution is written to app.Rout.
 
 On MacOS, you can use `$ zsh runme.sh /Users/anc/Dropbox/cars/TeslaTrackMode/telemetry-v1-2020-10-09-11_56_58.csv` which will open the browser for you.
 
+See the [wiki for documentation](https://github.com/adrianco/rs-tesla-telemetry/wiki/Documentation) on how the code works and how to modify and extend it. 
  
  ![Screenshot](screenshots/rs-tesla-telemetry-screenshot.png)
  
