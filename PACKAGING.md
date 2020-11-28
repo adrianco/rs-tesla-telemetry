@@ -104,3 +104,14 @@ No man pages found in package  ‘photon’
 * DONE (photon)
 > 
 ```
+
+3. Install Homebrew and npm
+Visit `https://brew.sh` for instructions
+
+Start a terminal window and install the homebrew package as shown there.
+
+Fix the permission and install npm
+```
+% sudo chown -R $(whoami) /usr/local/Cellar
+% brew install npm
+```
