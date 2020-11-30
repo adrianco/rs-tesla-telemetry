@@ -57,9 +57,9 @@ turns <<- data.frame() # initialize and clear for ui reference
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
-    rtf <<- read.csv(trackfile)
+    rtf <<- try(read.csv(trackfile))
     if (length(names(rtf)) != 29) {
-        stop("Expected 29 columns in tesla telemetry file")
+        stop("Expected 29 columns in tesla telemetry csv file")
     }
     # collapse data by averaging repeated location points, reduces size to about a fifth
     tf <<- collapv(rtf, c(1,5,4))
@@ -75,8 +75,8 @@ ptf <- function(trackfile, all=FALSE) {
         l <- tf[tf$Lap==i,] # get the data for one lap
         ln <- length(l$Lap) # get the number of data points
         # does the lap go all the way across the circuit and start end nearly the same place? 
-        if (all || ((max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
-            ((max(l[,5]) - min(l[,5]))/longspan > 0.95) &&
+        if (all || (abs(max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
+            (abs(max(l[,5]) - min(l[,5]))/longspan > 0.95) &&
             (abs(l[1,4] - l[ln,4]) < 0.0001) && (abs(l[1,5] - l[ln,5]) < 0.0001)) {
                 lapcnt <<- lapcnt+1
                 # add distance as a derived column for plotting instead of time
@@ -101,20 +101,18 @@ ptf <- function(trackfile, all=FALSE) {
     # read in locations of turn apexes for a specific track, use rounded off open location code to identify
     trackdir <<- paste0("tracks", .Platform$file.sep, encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
     fn <- paste0(trackdir, .Platform$file.sep, "turns.csv")
-    if (dir.exists(trackdir)) {
-        if (file.exists(fn)) {
-            turns <<- read.csv(fn,row.names=1)
-        } else {
-            turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
-        }
-    } else {
+    turns <<- data.frame(row.names="Start", lat=laps[[1]][1,4], lng=laps[[1]][1,5], radius=10) # start line default
+    if (!dir.exists(trackdir)) {
         dir.create(trackdir)
-        file.create(fn)
-        turns <<- data.frame(lat=0, lng=0, radius=10) # empty for now
     }
+    if (!file.exists(fn)) {
+        file.create(fn)
+        write.csv(turns, file = fn, quote = TRUE) # write new
+    }
+    tryCatch(turns <<- read.csv(fn,row.names=1), error=write.csv(turns, file = fn, quote = TRUE)) # overwrite bad file
     mn <- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
-        metadf <<- read.csv(mn)
+        metadf <<- try(read.csv(mn))
     } else {
         metadf <<- NULL
     }
