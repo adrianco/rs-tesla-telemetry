@@ -147,17 +147,25 @@ plap <- function(lap) {
 ui <- fluidPage(
     # Application title
     sidebarLayout(
-        sidebarPanel(
+        sidebarPanel(width=6,
             titlePanel("Shiny Tesla Telemetry Analyzer"),
             tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry"),
+            hr(),
+            splitLayout(cellWidths="25%",
+                        br(),
+                        selectInput("mappedlap", "Mapped Lap", NULL),
+                        selectInput("focus", "Focus", c("Performance","Temperature","Turns", "Driver"))
+            ),
+            leafletOutput("sidemap", height=500),
+            hr(),
             h4("Pick complete laps to compare sorted fastest first from:"),
             p(filename),
             DTOutput("laplist")
         ),
-        mainPanel(
+        mainPanel(width=6,
             tabsetPanel(
                 tabPanel("Speed",
-                        h3("Acceleration (red) and deceleration (blue) point by point, hover for speed and lateral G"),
+                        h3("Acceleration (red) and deceleration (blue) point by point, hover for speed and G"),
                         # speed oriented summary of selected laps
                         DTOutput("speedtab"),
                         # Show a map of the track with lap highlighted
@@ -200,16 +208,17 @@ ui <- fluidPage(
                          ),
                 tabPanel("Metadata",
                         h3("Metadata about the session"),
-                        splitLayout(cellWidths=c("25%"),
+                        splitLayout(cellWidths=c("20%","35%"),
                             actionButton("save", "Save", class = "btn-primary"),
                             verbatimTextOutput("metadatafile", TRUE),
                             tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
                         hr(), # Output section
-                        splitLayout(cellWidths="25%",
+                        splitLayout(cellWidths=c("35%","32%","18%","15%"),
                              verbatimTextOutput("telemetry", TRUE),
+                             verbatimTextOutput("latlong", TRUE),
                              verbatimTextOutput("date", TRUE),
-                             verbatimTextOutput("time", TRUE),
-                             verbatimTextOutput("latlong", TRUE)),
+                             verbatimTextOutput("time", TRUE)
+                             ),
                         hr(), # Input section
                         textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster..."),
                         splitLayout(cellWidths="25%",
@@ -285,7 +294,7 @@ colpal <- function(x) {
 server <- function(input, output, session) {
     # sidebar lap selector
     output$laplist <- renderDT({
-        datatable(lapdf[,c(3,4,6,7,9)], selection=list(selected=1, mode='multiple'),
+        datatable(lapdf[,c(3,4,6,7,9,11)], selection=list(selected=1, mode='multiple'),
                   options=list(pageLength=20, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
@@ -294,9 +303,29 @@ server <- function(input, output, session) {
         ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
+    #sidebar map
+    output$sidemap <- renderLeaflet({
+        ml <- as.numeric(input$mappedlap)
+        if (!is.na(ml)) {
+            leaflet(laps[[as.numeric(ml)]]) %>% addTiles() %>%
+                fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
+                addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
+                addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
+                           color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
+                           label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
+        }
+    })
+    
+    # sidebar map selector
+    observeEvent(input$laplist_rows_selected, {
+        x <- setNames(as.list(input$laplist_rows_selected), lapdf[input$laplist_rows_selected,1])
+        updateSelectInput(session, "mappedlap", choices=x)
+    })
+    
+    
     # Speed tab table and map
     output$speedtab <- renderDT({
-        datatable(lapdf[input$laplist_rows_selected, 2:11], selection=list(selected=1, mode='single'),
+        datatable(lapdf[input$laplist_rows_selected, 2:10], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
@@ -327,9 +356,11 @@ server <- function(input, output, session) {
         ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
+    gyr <- hcl.colors(10, palette="RdYlGn",rev=TRUE)
     # colour the circles
-    tempcolor <- function(pct) {
-        ifelse(pct > 1.0, "red", ifelse(pct > 0.8, "orange", "green"))
+    tempcolor <- function(x) {
+        ifelse(x > 1.0, "red", ifelse(x > 0.8, "orange", "green"))
+     #   gyr[round(min(x, 1.0)*10)]
     }
     
     
@@ -485,23 +516,24 @@ server <- function(input, output, session) {
                          "ambienttemperature", "surfacetemperature", "modelyear", "coldpressure", "frontcamber",
                          "rearcamber")
     selectFieldsInput <- c("driverexperience", "sessiontype", "sessionlevel", "units",
-                         "coursecondition", "model", "specification", "color", "wheel",
-                         "tiresize", "tyretype", "coldpressure", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "coilovers")
+                         "coursecondition", "model", "specification", "wheel",
+                         "tiresize", "tiretype", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "coilovers")
     textAreaFieldsInput <- "comments"
     fieldsInput <- c(numericFieldsInput, textFieldsInput, selectFieldsInput, textAreaFieldsInput)
     # build a list of name=value pairs and transpose to columns
     formData <- reactive({
         data <- sapply(fieldsInput, function(x) input[[x]])
         data <- c(telemetry=telemetry, telemetrydate=telemetrydate, telemetrytime=telemetrytime, telemetrylatlong=telemetrylatlong,
-                  data, timestamp = as.integer(Sys.time()))
+                  data, timestamp = as.character(as.integer(Sys.time())))
         data <- t(data)
         data
     })
     
     # save the metadata to the same directory as the telemetry file, and update the UI to confirm
     saveData <- function(data) {
+        datasave <<- data
         write.csv(x = data, file = file.path(telemetrydir, metadata),
-                  row.names = FALSE, quote = TRUE)
+                  row.names = FALSE)
         output$metadatafile <- renderText({ metadata })
     }
     
