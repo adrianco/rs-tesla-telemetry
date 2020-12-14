@@ -50,10 +50,12 @@ BrakeRotorChoice <- c("Stock", "Racing Brake", "Mountain Pass Performance", othe
 BrakeCaliperChoice <- c("Performance", "Standard", other)
 BrakeFluidChoice <- c("Stock", "Motul RBF600", "Castrol SRF", other)
 CoiloverChoice <- c("Stock", "Motion Control Systems Eibach", "Unplugged Performance Ohlins", "Mountain Pass Performance", other)
+FocusChoice <- c("Performance","Temperature","Plots","Turns","Driver")
 
 ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 turns <<- data.frame() # initialize and clear for ui reference
+bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0) # so that addCircles doesn't get null
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
@@ -138,7 +140,12 @@ plap <- function(lap) {
                           startChargePct=round(lap[1,14]), maxBrakeTempPct=round(max(lap[,19:22])*100),
                           # inverter and battery max temp percentages
                           maxFrontInverter=round(max(lap[, 23])*100), maxRearInverter=round(max(lap[,24])*100),
-                          maxBatteryTemp=round(max(lap[,25])*100))
+                          maxBatteryTemp=round(max(lap[,25])*100),
+                          # averages and extra stats added later - keeping column numbers consistent
+                          minKW=round(min(lap[,13])), avgThrottle=round(mean(lap$Throttle.Position....)),
+                          avgKW=round(mean(lap[,13])), maxSteerRate=round(max(abs(lap$Steering.Angle.Rate..deg.s.))),
+                          maxThrottlePct=round(sum((lap$Throttle.Position....>99.9))*100/length(lap$Throttle.Position....))
+                          )
     return(lapinfo)
 }
 
@@ -149,119 +156,115 @@ ui <- fluidPage(
     sidebarLayout(
         sidebarPanel(width=6,
             titlePanel("Shiny Tesla Telemetry Analyzer"),
-            tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry"),
-            hr(),
-            splitLayout(cellWidths="25%",
-                        br(),
-                        selectInput("mappedlap", "Mapped Lap", NULL),
-                        selectInput("focus", "Focus", c("Performance","Temperature","Turns", "Driver"))
-            ),
+            p("Open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500),
+            splitLayout(cellWidths="25%",
+                        tags$b(telemetrydate, "  ", telemetrytime, br(), textOutput("strack")),
+                        selectInput("mappedlap", "Mapped Lap", NULL),
+                        selectInput("focus", "Focus", FocusChoice)
+            ),
             hr(),
-            h4("Pick complete laps to compare sorted fastest first from:"),
+            h4("Pick complete laps to compare, sorted fastest first from:"),
             p(filename),
             DTOutput("laplist")
         ),
         mainPanel(width=6,
+            br(),
             tabsetPanel(
-                tabPanel("Speed",
-                        h3("Acceleration (red) and deceleration (blue) point by point, hover for speed and G"),
-                        # speed oriented summary of selected laps
-                        DTOutput("speedtab"),
-                        # Show a map of the track with lap highlighted
-                        leafletOutput("map", height=600)
+                tabPanel("Metadata",
+                         h3("Metadata about the session"),
+                         splitLayout(cellWidths=c("20%","35%"),
+                                     actionButton("save", "Save", class = "btn-primary"),
+                                     verbatimTextOutput("metadatafile", TRUE),
+                                     tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
+                         hr(), # Output section
+                         splitLayout(cellWidths=c("35%","32%","18%","15%"),
+                                     verbatimTextOutput("telemetry", TRUE),
+                                     verbatimTextOutput("latlong", TRUE),
+                                     verbatimTextOutput("date", TRUE),
+                                     verbatimTextOutput("time", TRUE)
+                         ),
+                         hr(), # Input section
+                         textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster..."),
+                         splitLayout(cellWidths="25%",
+                                     textInput("track", "Track Name", ""),
+                                     textInput("drivername", "Driver Name", ""),
+                                     numericInput("carnumber", "Car Number", 44, 1), #Hamilton default
+                                     numericInput("passengers", "Passengers", 0, 0)),
+                         splitLayout(cellWidths="25%",
+                                     p("Track mode settings"),
+                                     numericInput("handlingbalance", "Handling Balance", 50),
+                                     numericInput("stabilityassist", "Stability Assist", 0),
+                                     numericInput("regenerativebraking", "Regenerative Braking", 100)),
+                         splitLayout(cellWidths="25%",
+                                     textInput("sessionorganizer", "Session Organizer", ""),
+                                     selectInput("driverexperience", "Driver Experience", DriverExperienceChoice),
+                                     selectInput("sessiontype", "Session Type", SessionTypeChoice),
+                                     selectInput("sessionlevel", "Session Level", SessionLevelChoice)),
+                         splitLayout(cellWidths="25%",
+                                     selectInput("units", "Temperature Units", c("Fahrenheit", "Celsius")),
+                                     numericInput("ambienttemperature", "Ambient Temperature", 0),
+                                     numericInput("surfacetemperature", "Track Surface Temperature", 0),
+                                     selectInput("coursecondition", "Course Condition", CourseConditionChoice)),
+                         splitLayout(cellWidths="25%",
+                                     selectInput("model", "Model", ModelChoice),
+                                     selectInput("specification", "Specification", SpecificationChoice),
+                                     numericInput("modelyear", "Model Year", 2020, 2018),
+                                     textInput("color", "Color", "Blue")),
+                         splitLayout(cellWidths="25%",
+                                     selectInput("wheel", "Wheel", WheelChoice),
+                                     selectInput("tiresize", "Tire Size", TireSizeChoice),
+                                     selectInput("tiretype", "Tire Type", TireTypeChoice),
+                                     numericInput("coldpressure", "Cold Pressure", 40)),
+                         splitLayout(cellWidths="25%",
+                                     selectInput("brakepad", "Brake Pad", BrakePadChoice),
+                                     selectInput("brakerotor", "Brake Rotor", BrakeRotorChoice),
+                                     selectInput("brakecaliper", "Brake Caliper", BrakeCaliperChoice),
+                                     selectInput("brakefluid", "Brake Fluid", BrakeFluidChoice)),
+                         splitLayout(cellWidths="25%",
+                                     numericInput("frontcamber", "Front Camber (-1.0 to -0.1 std)", -1),
+                                     numericInput("rearcamber", "Rear Camber (-2.0 to 0.0 std)", -2),
+                                     selectInput("coilovers", "Coilovers", CoiloverChoice),
+                                     textInput("controlarms", "Control Arms", "Stock"))
                 ),
                 tabPanel("Temperature",
-                         h3("Battery temperature green, orange, red point by point, hover for details"),
+                         h4("Battery temperature green, orange, red point by point, hover for details"),
+                         # Show a map of the track with lap highlighted
+                         leafletOutput("tempmap", height=500),
+                         hr(),
                          # temperature oriented summary of selected laps
                          DTOutput("temptab"),
-                         # Show a map of the track with lap highlighted
-                         leafletOutput("tempmap", height=600)
+                         # speed oriented summary of selected laps
+                         DTOutput("speedtab")
                 ),
                 tabPanel("Plots",
-                         h3("Comparison plots"),
-                         DTOutput("plottab"),
-                         hr(),
-                         splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
-                            actionButton("zoom_out", "Zoom Out", class="btn-primary"),
-                            actionButton("reset_plot", "Reset Axes", class="btn-primary"),
-                            h4(" Select and move region with mouse and double-click to zoom in")
-                         ),
+                         h4("Comparison plots"),
                          plotOutput("speedplot", height='700px',
                                     dblclick = "plot_dblclick",
-                                    brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE))
+                                    brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE)),
+                         splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
+                                     actionButton("zoom_out", "Zoom Out", class="btn-primary"),
+                                     actionButton("reset_plot", "Reset Axes", class="btn-primary"),
+                                     h4(" Select and move region with mouse and double-click to zoom in")
+                         ),                         
+                         hr(),
+                         DTOutput("plottab")
                 ),
                 tabPanel("Turn Analysis",
-                         h3("Turn by turn analysis"),
-                         DTOutput("turnstab"),
-                         splitLayout(cellWidths=c("20%"),
-                                     selectInput("select_turn", "Select Turn", c("Whole Lap", row.names(turns)))
+                         h4("Turn by turn analysis"),
+                         plotOutput("turnplot", height='700px',
+                                    dblclick = "turn_dblclick",
+                                    brush = brushOpts(id = "turn_brush", clip=FALSE, resetOnNew=TRUE)),                         splitLayout(cellWidths=c("20%"),
+                                    selectInput("select_turn", "Select Turn", c("Whole Lap", row.names(turns)))
                          ),
                          splitLayout(cellWidths=c("15%","15%","50%"),
                                      actionButton("zoom_out_turn", "Zoom Out", class="btn-primary"),
                                      actionButton("reset_plot_turn", "Reset Axes", class="btn-primary"),
                                      h4(" Select and move region with mouse and double-click to zoom in")
                          ),
-                         plotOutput("turnplot", height='600px',
-                                dblclick = "turn_dblclick",
-                                brush = brushOpts(id = "turn_brush", clip=FALSE, resetOnNew=TRUE))
+                         hr(),
+                         DTOutput("turnstab")
                          ),
-                tabPanel("Metadata",
-                        h3("Metadata about the session"),
-                        splitLayout(cellWidths=c("20%","35%"),
-                            actionButton("save", "Save", class = "btn-primary"),
-                            verbatimTextOutput("metadatafile", TRUE),
-                            tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
-                        hr(), # Output section
-                        splitLayout(cellWidths=c("35%","32%","18%","15%"),
-                             verbatimTextOutput("telemetry", TRUE),
-                             verbatimTextOutput("latlong", TRUE),
-                             verbatimTextOutput("date", TRUE),
-                             verbatimTextOutput("time", TRUE)
-                             ),
-                        hr(), # Input section
-                        textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster..."),
-                        splitLayout(cellWidths="25%",
-                             textInput("track", "Track Name", ""),
-                             textInput("drivername", "Driver Name", ""),
-                             numericInput("carnumber", "Car Number", 44, 1), #Hamilton default
-                             numericInput("passengers", "Passengers", 0, 0)),
-                        splitLayout(cellWidths="25%",
-                             p("Track mode settings"),
-                             numericInput("handlingbalance", "Handling Balance", 50),
-                             numericInput("stabilityassist", "Stability Assist", 0),
-                             numericInput("regenerativebraking", "Regenerative Braking", 100)),
-                        splitLayout(cellWidths="25%",
-                             textInput("sessionorganizer", "Session Organizer", ""),
-                             selectInput("driverexperience", "Driver Experience", DriverExperienceChoice),
-                             selectInput("sessiontype", "Session Type", SessionTypeChoice),
-                             selectInput("sessionlevel", "Session Level", SessionLevelChoice)),
-                        splitLayout(cellWidths="25%",
-                             selectInput("units", "Temperature Units", c("Fahrenheit", "Celsius")),
-                             numericInput("ambienttemperature", "Ambient Temperature", 0),
-                             numericInput("surfacetemperature", "Track Surface Temperature", 0),
-                             selectInput("coursecondition", "Course Condition", CourseConditionChoice)),
-                        splitLayout(cellWidths="25%",
-                             selectInput("model", "Model", ModelChoice),
-                             selectInput("specification", "Specification", SpecificationChoice),
-                             numericInput("modelyear", "Model Year", 2020, 2018),
-                             textInput("color", "Color", "Blue")),
-                        splitLayout(cellWidths="25%",
-                             selectInput("wheel", "Wheel", WheelChoice),
-                             selectInput("tiresize", "Tire Size", TireSizeChoice),
-                             selectInput("tiretype", "Tire Type", TireTypeChoice),
-                             numericInput("coldpressure", "Cold Pressure", 40)),
-                        splitLayout(cellWidths="25%",
-                             selectInput("brakepad", "Brake Pad", BrakePadChoice),
-                             selectInput("brakerotor", "Brake Rotor", BrakeRotorChoice),
-                             selectInput("brakecaliper", "Brake Caliper", BrakeCaliperChoice),
-                             selectInput("brakefluid", "Brake Fluid", BrakeFluidChoice)),
-                        splitLayout(cellWidths="25%",
-                             numericInput("frontcamber", "Front Camber (-1.0 to -0.1 std)", -1),
-                             numericInput("rearcamber", "Rear Camber (-2.0 to 0.0 std)", -2),
-                             selectInput("coilovers", "Coilovers", CoiloverChoice),
-                             textInput("controlarms", "Control Arms", "Stock"))
-                        ),
                     tabPanel("Turn Editor",
                         h3("Setup Turns for a Track"),
                         splitLayout(cellWidths=c("25%"),
@@ -279,22 +282,16 @@ ui <- fluidPage(
     ) # fluidpage
 
 
-# color the circles
+# return vector of colors
 accelcolor <- function(accel) {
     ifelse(accel > 0, "red", "blue")
-}
-
-# color cycle for plots
-colpal <- function(x) {
-    # get nine different colors and pick one
-    palette.colors(9)[x%%9]
 }
 
 # Define server logic for viewing trackfile
 server <- function(input, output, session) {
     # sidebar lap selector
     output$laplist <- renderDT({
-        datatable(lapdf[,c(3,4,6,7,9,11)], selection=list(selected=1, mode='multiple'),
+        datatable(lapdf[,c(3,4,6,7,9,20,18,11)], selection=list(selected=1, mode='multiple'),
                   options=list(pageLength=20, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
@@ -305,14 +302,24 @@ server <- function(input, output, session) {
     
     #sidebar map
     output$sidemap <- renderLeaflet({
+        # show plotting brush when it exists
+        cs <- input$plottab_cells_selected
+        if (length(cs) > 0) {
+            lap <- laps[[input$laplist_rows_selected[cs[1,1]]]]
+            if (!is.null(lap)) {
+                bp <<- brushedPoints(lap, input$plot_brush, "Distance", names(lap)[unpick(cs[1,2])])
+            }
+        }
         ml <- as.numeric(input$mappedlap)
-        if (!is.na(ml)) {
+        if (length(input$laplist_rows_selected) > 0 && !is.na(ml)) {
             leaflet(laps[[as.numeric(ml)]]) %>% addTiles() %>%
                 fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
                 addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
                 addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                            color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
-                           label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
+                           label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G")) %>%
+                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=4,
+                               color="white")
         }
     })
     
@@ -323,7 +330,7 @@ server <- function(input, output, session) {
     })
     
     
-    # Speed tab table and map
+    # Speed summary table
     output$speedtab <- renderDT({
         datatable(lapdf[input$laplist_rows_selected, 2:10], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
@@ -333,19 +340,8 @@ server <- function(input, output, session) {
                   )
         ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
-    
-    output$map <- renderLeaflet({
-        if (length(input$laplist_rows_selected) > 0 && length(input$speedtab_rows_selected) > 0) {
-        leaflet(laps[[input$laplist_rows_selected[input$speedtab_rows_selected]]]) %>% addTiles() %>%
-            fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
-            addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
-                       color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
-                       label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
-        }
-    })
 
-    # Temperature tab table and map
+    # Temperature summary table and map
     output$temptab <- renderDT({
         datatable(lapdf[input$laplist_rows_selected, c(5,10:15)], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
@@ -356,11 +352,10 @@ server <- function(input, output, session) {
         ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
-    gyr <- hcl.colors(10, palette="RdYlGn",rev=TRUE)
-    # colour the circles
+    gyr <- hcl.colors(100, palette="RdYlGn",rev=TRUE)
+    # colour the array of circles according to the temperature array
     tempcolor <- function(x) {
         ifelse(x > 1.0, "red", ifelse(x > 0.8, "orange", "green"))
-     #   gyr[round(min(x, 1.0)*10)]
     }
     
     
@@ -369,9 +364,9 @@ server <- function(input, output, session) {
         leaflet(laps[[input$laplist_rows_selected[input$temptab_rows_selected]]]) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
             addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
-            addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
-                       color=~tempcolor(Battery.Temp....),
-                       label=~paste(" Battery:", round(Battery.Temp....,2),
+            addCircles(lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=1,
+                       color= ~tempcolor(Battery.Temp....),
+                       label= ~paste(" Battery:", round(Battery.Temp....,2),
                                     "Brakes:", round(Brake.Temperature.Front.Left....est..,2), round(Brake.Temperature.Front.Right....est..,2),
                                     round(Brake.Temperature.Rear.Left....est..,2), round(Brake.Temperature.Rear.Right....est..,2),
                                     " InvertersFR:", round(Front.Inverter.Temp....,2), round(Rear.Inverter.Temp....,2)
@@ -430,6 +425,7 @@ server <- function(input, output, session) {
     observeEvent(input$reset_plot, {
         plot.range$x <- xlimits 
         plot.range$y <- ylimits
+        bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0)
     })
     
     # double the size of the zoomed area
@@ -438,10 +434,11 @@ server <- function(input, output, session) {
         yspan <- plot.range$y[2] - plot.range$y[1]
         plot.range$x <- c(plot.range$x[1]-xspan/2, plot.range$x[2]+xspan/2)
         plot.range$y <- c(plot.range$y[1]-yspan/2, plot.range$y[2]+yspan/2)
+        bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0)
     })
     
     output$speedplot <- renderPlot({
-        cs <<- input$plottab_cells_selected #matrix of the lap [,1] and value [,2] to plot in order
+        cs <- input$plottab_cells_selected #matrix of the lap [,1] and value [,2] to plot in order
         ylimits <<- c(0,0) # track the limits of the data across all selected sources
         xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
         if (length(input$laplist_rows_selected) > 0 && length(cs) > 0) {
@@ -531,7 +528,6 @@ server <- function(input, output, session) {
     
     # save the metadata to the same directory as the telemetry file, and update the UI to confirm
     saveData <- function(data) {
-        datasave <<- data
         write.csv(x = data, file = file.path(telemetrydir, metadata),
                   row.names = FALSE)
         output$metadatafile <- renderText({ metadata })
@@ -549,6 +545,7 @@ server <- function(input, output, session) {
     output$latlong <- renderText({ paste("Lat;Long:", telemetrylatlong) })
     # put any values that were read at startup back into the display
     if (!is.null(metadf)) {
+        output$strack <- renderText({metadf$track[1]})
         sapply(textFieldsInput, function(x) updateTextInput(session, x, value=metadf[1,x]))
         sapply(numericFieldsInput, function(x) updateNumericInput(session, x, value=metadf[1,x]))
         sapply(selectFieldsInput, function(x) updateSelectInput(session, x, selected=metadf[1,x]))
