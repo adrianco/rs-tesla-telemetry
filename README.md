@@ -34,6 +34,8 @@ On MacOS, you can use `$ zsh runme.zsh /Users/anc/Dropbox/cars/TeslaTrackMode/te
 
 See the [wiki for documentation](https://github.com/adrianco/rs-tesla-telemetry/wiki/Documentation) on how the code works and how to modify and extend it. 
  
+ Screenshots currently out of date - some re-organization of the UI is under way.
+ 
  ![Screenshot](screenshots/rs-tesla-telemetry-screenshot.png)
  
  ![Screenshot](screenshots/rs-tesla-telemetry-screenshot-temp.png)
