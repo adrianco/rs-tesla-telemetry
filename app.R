@@ -160,8 +160,8 @@ ui <- fluidPage(
             leafletOutput("sidemap", height=500),
             splitLayout(cellWidths="25%",
                         tags$b(telemetrydate, "  ", telemetrytime, br(), textOutput("strack")),
-                        selectInput("mappedlap", "Mapped Lap", NULL),
-                        selectInput("focus", "Focus", FocusChoice)
+                        selectInput("mappedlap", "Mapped Lap", NULL)
+                        #selectInput("focus", "Focus", FocusChoice)
             ),
             hr(),
             h4("Pick complete laps to compare, sorted fastest first from:"),
@@ -251,7 +251,7 @@ ui <- fluidPage(
                          DTOutput("plottab")
                 ),
                 tabPanel("Turn Analysis",
-                         h4("Turn by turn analysis"),
+                         h4("Turn by turn analysis (work in progress)"),
                          plotOutput("turnplot", height='700px',
                                     dblclick = "turn_dblclick",
                                     brush = brushOpts(id = "turn_brush", clip=FALSE, resetOnNew=TRUE)),                         splitLayout(cellWidths=c("20%"),
@@ -266,7 +266,7 @@ ui <- fluidPage(
                          DTOutput("turnstab")
                          ),
                     tabPanel("Turn Editor",
-                        h3("Setup Turns for a Track"),
+                        h3("Setup Turns for a Track (work in progress)"),
                         splitLayout(cellWidths=c("25%"),
                                     actionButton("save_turns", "Save", class = "btn-primary"),
                                     verbatimTextOutput("turnsfile", TRUE)),
@@ -318,8 +318,7 @@ server <- function(input, output, session) {
                 addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                            color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                            label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G")) %>%
-                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=4,
-                               color="white")
+                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=1, color="black")
         }
     })
     
