@@ -117,10 +117,97 @@ Fix the permission and install npm
 ```
 
 4. RStudio setup
-Make sure shinyBS is installed before starting Photon
+Make sure your github directory is not stored on DropBox, as Photon cannot cope with directory paths that contaion '(' or ')' as created by DropBox.
+
+Open photon as a new project. Then select rs-tesla-telemetry and hit the Build button. It will download electron-quick-start but has a directory location bug.
+
 ```
-> install.packages("shinyBS")
+> photon:::photon_rstudioaddin()
+Loading required package: shiny
+
+Listening on http://127.0.0.1:4303
+[1] "Selected directory: "
+[1] "Selected directory: /Users/anc/github/rs-tesla-telemetry"
+Running Photon
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+*** R_HOME_DIR ***
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+WARNING: ignoring environment value of R_HOME
+
+  There is a binary version available but the source version is later:
+        binary source needs_compilation
+remotes  2.1.1  2.2.0             FALSE
+
+installing the source package ‘remotes’
+
+trying URL 'http://cran.us.r-project.org/src/contrib/remotes_2.2.0.tar.gz'
+Content type 'application/x-gzip' length 145553 bytes (142 KB)
+==================================================
+downloaded 142 KB
+
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+*** R_HOME_DIR ***
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+*** R_HOME_DIR ***
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac
+* installing *source* package ‘remotes’ ...
+** package ‘remotes’ successfully unpacked and MD5 sums checked
+** R
+** inst
+** byte-compile and prepare package for lazy loading
+** help
+*** installing help indices
+** building package indices
+** installing vignettes
+** testing if installed package can be loaded
+/private/var/folders/yz/7k7dhbdn2ybdzxwd18lndmrjvwy8xp/T/RtmpqBkzW6/R.INSTALL13bec3f41aecd/remotes
+*** R_HOME_DIR ***
+/private/var/folders/yz/7k7dhbdn2ybdzxwd18lndmrjvwy8xp/T/RtmpqBkzW6/R.INSTALL13bec3f41aecd/remotes
+WARNING: ignoring environment value of R_HOME
+/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac/bin/R: line 258: /private/var/folders/yz/7k7dhbdn2ybdzxwd18lndmrjvwy8xp/T/RtmpqBkzW6/R.INSTALL13bec3f41aecd/remotes/etc/ldpaths: No such file or directory
+ERROR: loading failed
+* removing ‘/Users/anc/github/rs-tesla-telemetry/electron-quick-start/R-Portable-Mac/library/remotes’
+
+The downloaded source packages are in
+	‘/private/var/folders/yz/7k7dhbdn2ybdzxwd18lndmrjvwy8xp/T/RtmpRrbZ6f/downloaded_packages’
+Updating HTML index of packages in '.Library'
+Making 'packages.html' ... done
+Warning message:
+In install.packages("remotes", repos = "http://cran.us.r-project.org") :
+  installation of package ‘remotes’ had non-zero exit status
+
+Attaching package: ‘magrittr’
+
+The following object is masked from ‘package:purrr’:
+
+    set_names
+
+$cran_packages
+[1] "NULL"
+
+$github_packages
+[1] "NULL"
+
+$bioc_packages
+[1] "NULL"
+
+
+up to date, audited 149 packages in 1s
+
+4 low severity vulnerabilities
+
+To address all issues, run:
+  npm audit fix
+
+Run `npm audit` for details.
+
+> electron-quick-start@1.0.0 package-mac
+> electron-packager . --overwrite --platform=darwin --arch=x64 --out=ElectronShinyAppMac
+
+Packaging app for platform darwin x64 using electron v5.0.7
+Wrote new app to ElectronShinyAppMac/electron-quick-start-darwin-x64
 ```
-Also make sure your github directory is not stored on DropBox, as Photon cannot cope with directory paths that contaion '(' or ')' as created by DropBox...
-Edit your .gitignore file to add node_modules so that git doesn't try to store them back onto github as changes
+
+
 
