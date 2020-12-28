@@ -115,3 +115,12 @@ Fix the permission and install npm
 % sudo chown -R $(whoami) /usr/local/Cellar
 % brew install npm
 ```
+
+4. RStudio setup
+Make sure shinyBS is installed before starting Photon
+```
+> install.packages("shinyBS")
+```
+Also make sure your github directory is not stored on DropBox, as Photon cannot cope with directory paths that contaion '(' or ')' as created by DropBox...
+Edit your .gitignore file to add node_modules so that git doesn't try to store them back onto github as changes
+
