@@ -12,27 +12,15 @@ library(leaflet)
 library(DT)
 library(collapse)
 library(olctools)
+library(shinyFiles)
+library(stringr)
 
-# initialization section
-# if started from the command line with 'Rscript app.R filename', use the filename given
-if (length(commandArgs(TRUE)) > 0) {
-    filename <- commandArgs(TRUE)
-} else {
-    filename <- file.choose()
-}
-# Generate all the directory and file paths needed for this run, extract date/time from filename
-# Users username path... telemetry-v1-2020-10-09-11_56_58.csv
-filepath <- unlist(strsplit(filename, .Platform$file.sep)) # separate using / or \
-telemetry <- filepath[length(filepath)] # telemetry-v1-2020-10-09-11_56_58.csv
-telemetrydir <- paste(filepath[-length(filepath)], collapse=.Platform$file.sep)
-telemetrysplit <- unlist(strsplit(telemetry, "-|_|[.]")) # telemetry v1 2020 10 09 11 56 58 csv
-telemetrydate <- paste(telemetrysplit[3:5], collapse='-') # "2020-10-09"
-telemetrytime <- paste(telemetrysplit[6:8], collapse=':') # "11:56:58"
-# construct filename base for additional export files
-namebase <- sprintf("-v1-%s-%s-%s-%s_%s_%s.csv", telemetrysplit[3], telemetrysplit[4], telemetrysplit[5],
-                    telemetrysplit[6], telemetrysplit[7], telemetrysplit[8])
-# metadata saved and loaded matching each telemetry file
-metadata <- paste0("metadata", namebase) # metadata-v1-2020-10-09-11_56_58.csv
+# clear out persisted data
+laps <<- NULL
+lapdf <<- NULL
+tf <<- NULL
+dtf <<- NULL
+metadf <<- NULL
 
 # Metadata Choices
 other <- "Other-see comments"
@@ -112,7 +100,7 @@ ptf <- function(trackfile, all=FALSE) {
         write.csv(turns, file = fn, quote = TRUE) # write new
     }
     tryCatch(turns <<- read.csv(fn,row.names=1), error=write.csv(turns, file = fn, quote = TRUE)) # overwrite bad file
-    mn <- file.path(telemetrydir, metadata)
+    mn <<- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
         metadf <<- try(read.csv(mn))
     } else {
@@ -159,13 +147,13 @@ ui <- fluidPage(
             p("Open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500),
             splitLayout(cellWidths="25%",
-                        tags$b(telemetrydate, "  ", telemetrytime, br(), textOutput("strack")),
+                        tags$b(shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file', multiple=FALSE)),
+                        tags$b(textOutput("telemetrydate"), "  ", textOutput("telemetrytime"), textOutput("strack")),
                         selectInput("mappedlap", "Mapped Lap", NULL)
-                        #selectInput("focus", "Focus", FocusChoice)
             ),
             hr(),
             h4("Pick complete laps to compare, sorted fastest first from:"),
-            p(filename),
+            p(textOutput("filename")),
             DTOutput("laplist")
         ),
         mainPanel(width=6,
@@ -291,15 +279,86 @@ accelcolor <- function(accel) {
 
 # Define server logic for viewing trackfile
 server <- function(input, output, session) {
+    # initialize paths so that changes are reflected in the UI
+    paths <- reactiveValues(
+        filename="",
+        telemetry="",
+        telemetrydir="",
+        telemetrydate="",
+        telemetrytime="",
+        telemetrylatlong="",
+        namebase="",
+        metadata=""
+    )
+    # create reactive links for data sources
+    rdata <- reactiveValues(
+        laps=NULL,
+        lapdf=NULL,
+        metadf=NULL,
+        turns=NULL
+    )
+    # Generate all the reactive directory and file paths needed for this run, extract date/time from filename
+    # Users username path... telemetry-v1-2020-10-09-11_56_58.csv
+    makeFilePaths <- function(fn, rp) {
+        filename <<- fn
+        rp$filename <- fn
+        filepath <<- unlist(strsplit(fn, .Platform$file.sep)) # separate using / or \
+        rp$telemetry <- filepath[length(filepath)] # telemetry-v1-2020-10-09-11_56_58.csv
+        telemetrydir <<- paste(filepath[-length(filepath)], collapse=.Platform$file.sep)
+        telemetrysplit <- unlist(strsplit(rp$telemetry, "-|_|[.]")) # telemetry v1 2020 10 09 11 56 58 csv
+        rp$telemetrydate <- paste(telemetrysplit[3:5], collapse='-') # "2020-10-09"
+        rp$telemetrytime <- paste(telemetrysplit[6:8], collapse=':') # "11:56:58"
+        # construct filename base for additional export files
+        namebase <<- sprintf("-v1-%s-%s-%s-%s_%s_%s.csv", telemetrysplit[3], telemetrysplit[4], telemetrysplit[5],
+                               telemetrysplit[6], telemetrysplit[7], telemetrysplit[8])
+        # metadata saved and loaded matching each telemetry file
+        metadata <<- paste0("metadata", namebase) # metadata-v1-2020-10-09-11_56_58.csv
+        rp$metadata <- metadata
+    }
+    # where to get telemetry file from
+    volumes <- c(Home = fs::path_home(), getVolumes()())
+    # load file from popup button
+    observe({
+        req(input$tfile)
+        fp <<- parseFilePaths(roots=volumes,selection=input$tfile)
+        #str(fp)
+        req(fp$datapath)
+        makeFilePaths(fp$datapath, paths)
+        if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
+            if (!ptf(filename, all=TRUE)) # try again without filter
+                stop("No laps found in telemetry file")
+        }
+        rdata$laps <- laps
+        rdata$lapdf <- lapdf
+        rdata$metadf <- metadf
+        rdata$turns <- turns
+    })
+    
+    # refresh displayed paths
+    output$filename <- renderText({
+        req(paths$filename)
+        paths$filename
+    })
+    output$telemetrydate <- renderText({
+        req(paths$telemetrydate)
+        paths$telemetrydate
+    })
+    output$telemetrytime <- renderText({
+        req(paths$telemetrytime)
+        paths$telemetrytime
+    })
+    
     # sidebar lap selector
     output$laplist <- renderDT({
+        req(rdata$lapdf)
         datatable(lapdf[,c(3,4,6,7,9,20,18,11)], selection=list(selected=1, mode='multiple'),
                   options=list(pageLength=20, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
                       "}")
                   )
-        ) %>% formatStyle(1, target="row", fontWeight="bold")
+            ) %>% formatStyle(1, target="row", fontWeight="bold")
+        
     })
     
     #sidebar map
@@ -330,9 +389,12 @@ server <- function(input, output, session) {
         updateSelectInput(session, "mappedlap", choices=x)
     })
     
+    # pop a chooser to pick a local file to display
+    shinyFileChoose(input, 'tfile', root=volumes, filetypes=c('csv'), session=session)
     
     # Speed summary table
     output$speedtab <- renderDT({
+        req(lapdf)
         datatable(lapdf[input$laplist_rows_selected, c(2:5, 16, 7:9)], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
@@ -344,6 +406,7 @@ server <- function(input, output, session) {
 
     # Temperature summary table and map
     output$temptab <- renderDT({
+        req(rdata$lapdf)
         datatable(lapdf[input$laplist_rows_selected, c(10:15,19)], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
@@ -387,6 +450,7 @@ server <- function(input, output, session) {
     
     # plotting tab
     output$plottab <- renderDT({
+        req(rdata$lapdf)
         datatable(lapdf[input$laplist_rows_selected, colmap[1,]], selection=list(selected=matrix(c(1,2),1), mode='multiple', target='cell'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
@@ -469,6 +533,7 @@ server <- function(input, output, session) {
     # Turn Analysis tab
     # start with same picker as plot, since we want to compare multiple laps
     output$turnstab <- renderDT({
+        req(lapdf)
         datatable(lapdf[input$laplist_rows_selected, colmap[1,]], selection=list(selected=matrix(c(1,2),1), mode='multiple', target='cell'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
@@ -539,22 +604,26 @@ server <- function(input, output, session) {
         saveData(formData())
     })
     
-    # fixed output values added to metadata file
-    output$telemetry <- renderText({ telemetry })
-    output$date <- renderText({ paste("Date:", telemetrydate) })
-    output$time <- renderText({ paste("Time:", telemetrytime) })
-    output$latlong <- renderText({ paste("Lat;Long:", telemetrylatlong) })
-    # put any values that were read at startup back into the display
-    if (!is.null(metadf)) {
-        output$strack <- renderText({metadf$track[1]})
-        sapply(textFieldsInput, function(x) updateTextInput(session, x, value=metadf[1,x]))
-        sapply(numericFieldsInput, function(x) updateNumericInput(session, x, value=metadf[1,x]))
-        sapply(selectFieldsInput, function(x) updateSelectInput(session, x, selected=metadf[1,x]))
-        sapply(textAreaFieldsInput, function(x) updateTextAreaInput(session, x, value=metadf[1,x]))
-    }
+    # update when metadata changes
+    observeEvent(rdata$metadf, {
+        # fixed output values added to metadata file
+        output$telemetry <- renderText({ paths$telemetry })
+        output$date <- renderText({ paste("Date:", paths$telemetrydate) })
+        output$time <- renderText({ paste("Time:", paths$telemetrytime) })
+        output$latlong <- renderText({ paste("Lat;Long:", telemetrylatlong) })
+        # put any values that were read at startup back into the display
+        if (!is.null(rdata$metadf)) {
+            output$strack <- renderText({metadf$track[1]})
+            sapply(textFieldsInput, function(x) updateTextInput(session, x, value=metadf[1,x]))
+            sapply(numericFieldsInput, function(x) updateNumericInput(session, x, value=metadf[1,x]))
+            sapply(selectFieldsInput, function(x) updateSelectInput(session, x, selected=metadf[1,x]))
+            sapply(textAreaFieldsInput, function(x) updateTextAreaInput(session, x, value=metadf[1,x]))
+        }
+    })
     
     # Turn setup tab
     output$turnslist <- renderDT({
+        req(rdata$turns)
         datatable(turns, selection=list(selected=matrix(c(1,2),1), mode='single', target='cell'),
                   options=list(pageLength=15, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
@@ -566,8 +635,13 @@ server <- function(input, output, session) {
 } #end of server
 
 # Run the application
-if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
-    if (!ptf(filename, all=TRUE)) # try again without filter
-        stop("No laps found in telemetry file")
-}
+# initialization section
+# if started from the command line with 'Rscript app.R filename', use the filename given
+#if (length(commandArgs(TRUE)) > 0) {
+#    filename <- commandArgs(TRUE)
+#    makeFilePaths(filename, paths) #no longer in scope
+    #} else {
+    #filename <- file.choose()
+    #makeFilePaths(filename, paths)
+#}
 shinyApp(ui = ui, server = server)
