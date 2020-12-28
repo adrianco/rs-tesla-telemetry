@@ -137,14 +137,14 @@ plap <- function(lap) {
                           maxLateralG=round(max(lap[6])/gms, 2), maxAccelG=round(max(lap[7])/gms, 2),
                           maxBrakeG=-round(min(lap[7])/gms, 2), maxBrakePedal=round(max(lap[9]),1),
                           # charge at start of lap, max temp for all brakes
-                          startChargePct=round(lap[1,14]), maxBrakeTempPct=round(max(lap[,19:22])*100),
+                          startCharge=round(lap[1,14]), maxBrakeTemp=round(max(lap[,19:22])*100),
                           # inverter and battery max temp percentages
                           maxFrontInverter=round(max(lap[, 23])*100), maxRearInverter=round(max(lap[,24])*100),
                           maxBatteryTemp=round(max(lap[,25])*100),
                           # averages and extra stats added later - keeping column numbers consistent
                           minKW=round(min(lap[,13])), avgThrottle=round(mean(lap$Throttle.Position....)),
                           avgKW=round(mean(lap[,13])), maxSteerRate=round(max(abs(lap$Steering.Angle.Rate..deg.s.))),
-                          maxThrottlePct=round(sum((lap$Throttle.Position....>99.9))*100/length(lap$Throttle.Position....))
+                          maxThrottle=round(sum((lap$Throttle.Position....>99.9))*100/length(lap$Throttle.Position....))
                           )
     return(lapinfo)
 }
@@ -228,7 +228,7 @@ ui <- fluidPage(
                                      textInput("controlarms", "Control Arms", "Stock"))
                 ),
                 tabPanel("Temperature",
-                         h4("Battery temperature green, orange, red point by point, hover for details"),
+                         h3("Battery temperature green, orange, red point by point, hover for details"),
                          # Show a map of the track with lap highlighted
                          leafletOutput("tempmap", height=500),
                          hr(),
@@ -238,8 +238,7 @@ ui <- fluidPage(
                          DTOutput("speedtab")
                 ),
                 tabPanel("Plots",
-                         h4("Comparison plots"),
-                         plotOutput("speedplot", height='700px',
+                         plotOutput("speedplot", height='600px',
                                     dblclick = "plot_dblclick",
                                     brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE)),
                          splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
@@ -252,7 +251,7 @@ ui <- fluidPage(
                 ),
                 tabPanel("Turn Analysis",
                          h4("Turn by turn analysis (work in progress)"),
-                         plotOutput("turnplot", height='700px',
+                         plotOutput("turnplot", height='600px',
                                     dblclick = "turn_dblclick",
                                     brush = brushOpts(id = "turn_brush", clip=FALSE, resetOnNew=TRUE)),                         splitLayout(cellWidths=c("20%"),
                                     selectInput("select_turn", "Select Turn", c("Whole Lap", row.names(turns)))
@@ -268,8 +267,11 @@ ui <- fluidPage(
                     tabPanel("Turn Editor",
                         h3("Setup Turns for a Track (work in progress)"),
                         splitLayout(cellWidths=c("25%"),
-                                    actionButton("save_turns", "Save", class = "btn-primary"),
+                                    actionButton("save_turns", "Save to file", class = "btn-primary"),
                                     verbatimTextOutput("turnsfile", TRUE)),
+                        splitLayout(cellWidths=c("25%"),
+                                    actionButton("new_turn", "Add new turn", class = "btn-primary"),
+                                    textInput("new_turn_name", "New Turn Name")),                       
                         hr(),
                         splitLayout(cellWidths=c("40%", "70%"),
                             DTOutput("turnslist"),
@@ -331,7 +333,7 @@ server <- function(input, output, session) {
     
     # Speed summary table
     output$speedtab <- renderDT({
-        datatable(lapdf[input$laplist_rows_selected, 2:10], selection=list(selected=1, mode='single'),
+        datatable(lapdf[input$laplist_rows_selected, c(2:5, 16, 7:9)], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
@@ -342,7 +344,7 @@ server <- function(input, output, session) {
 
     # Temperature summary table and map
     output$temptab <- renderDT({
-        datatable(lapdf[input$laplist_rows_selected, c(5,10:15)], selection=list(selected=1, mode='single'),
+        datatable(lapdf[input$laplist_rows_selected, c(10:15,19)], selection=list(selected=1, mode='single'),
                   options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
