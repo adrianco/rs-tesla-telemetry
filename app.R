@@ -44,9 +44,8 @@ FocusChoice <- c("Performance","Temperature","Plots","Turns","Driver")
 ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 turns <<- data.frame() # initialize and clear for ui reference
-bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0, Speed..MPH.=0, Lateral.Acceleration..m.s.2.=0) # so that addCircles doesn't get null
-vidid <- "wMQZDMQ8bLQ" # sample youtube id to start with
-vidstart <- "5s"
+bpreset <- data.frame(Elapsed.Time..ms.=0, Longitude..decimal.=0, Latitude..decimal.=0, Speed..MPH.=0, Lateral.Acceleration..m.s.2.=0) # so that addCircles doesn't get null
+bp <- bpreset
 error <- ""
 starttimes <<- array() # times that each lap starts
 
@@ -185,7 +184,11 @@ ui <- fluidPage(
                                      verbatimTextOutput("time", TRUE)
                          ),
                          hr(), # Input section
-                         textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster..."),
+                         splitLayout(cellWidths=c("50%","25%", "25%"),
+                            textAreaInput("comments", "Comments and customizations", placeholder="Excuses for not being faster...", resize="vertical", width="180%"),
+                            textInput("youtube", "YouTube ID", ""),
+                            numericInput("youtubeOffset", "Video start time offset", 0)
+                         ),
                          splitLayout(cellWidths="25%",
                                      textInput("track", "Track Name", ""),
                                      textInput("drivername", "Driver Name", ""),
@@ -238,7 +241,17 @@ ui <- fluidPage(
                          DTOutput("speedtab")
                 ),
                 tabPanel("Plots",
-                         plotOutput("speedplot", height='600px',
+                         splitLayout(cellWidths=c("70%","30%"),
+                                    uiOutput("vidid"),
+                                    DTOutput("turnslist")
+                         ),
+                         splitLayout(cellWidths=c("15%"),
+                                     actionButton("replay", "Replay", class="btn-primary"),
+                                     #textInput("vididInput", "YouTube ID"),
+                                     numericInput("vidStartInput", "Start time for lap", 0, min=0),
+                                     numericInput("vidStartOffset", "Offset within lap", 0)
+                         ),
+                         plotOutput("speedplot", height='400px',
                                     dblclick = "plot_dblclick",
                                     brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE)),
                          splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
@@ -248,43 +261,6 @@ ui <- fluidPage(
                          ),                         
                          hr(),
                          DTOutput("plottab")
-                ),
-                tabPanel("Turn Analysis",
-                         h4("Turn by turn analysis (work in progress)"),
-                         plotOutput("turnplot", height='600px',
-                                    dblclick = "turn_dblclick",
-                                    brush = brushOpts(id = "turn_brush", clip=FALSE, resetOnNew=TRUE)),                         splitLayout(cellWidths=c("20%"),
-                                    selectInput("select_turn", "Select Turn", c("Whole Lap", row.names(turns)))
-                         ),
-                         splitLayout(cellWidths=c("15%","15%","50%"),
-                                     actionButton("zoom_out_turn", "Zoom Out", class="btn-primary"),
-                                     actionButton("reset_plot_turn", "Reset Axes", class="btn-primary"),
-                                     h4(" Select and move region with mouse and double-click to zoom in")
-                         ),
-                         hr(),
-                         DTOutput("turnstab")
-                         ),
-                    tabPanel("Video",
-                        uiOutput("vidid"),
-                        splitLayout(cellWidths=c("15%","15%","50%"),
-                                    textInput("vididInput", "YouTube ID", vidid),
-                                    textInput("vidStartInput", "Start time for lap", "0s"),
-                                    h4(br()," ")
-                            )
-                        ),
-                    tabPanel("Turn Editor",
-                        h3("Setup Turns for a Track (work in progress)"),
-                        splitLayout(cellWidths=c("25%"),
-                                    actionButton("save_turns", "Save to file", class = "btn-primary"),
-                                    verbatimTextOutput("turnsfile", TRUE)),
-                        splitLayout(cellWidths=c("25%"),
-                                    actionButton("new_turn", "Add new turn", class = "btn-primary"),
-                                    textInput("new_turn_name", "New Turn Name")),                       
-                        hr(),
-                        splitLayout(cellWidths=c("40%", "70%"),
-                            DTOutput("turnslist"),
-                            leafletOutput("turnmap", height='500px')
-                        )
                     ) #tabpanel
                 ) # tabsetpanel
             ) # mainpanel
@@ -400,6 +376,8 @@ server <- function(input, output, session) {
             lap <- laps[[input$laplist_rows_selected[cs[1,1]]]]
             if (!is.null(lap)) {
                 bp <<- brushedPoints(lap, input$plot_brush, "Distance", names(lap)[unpick(cs[1,2])])
+                if (length(bp$Elapsed.Time..ms.) > 1) # is a real brush in use
+                    updateNumericInput(session, "vidStartOffset", value=trunc(bp$Elapsed.Time..ms.[1]/1000.0))
             }
         }
         ml <- as.numeric(input$mappedlap)
@@ -424,7 +402,7 @@ server <- function(input, output, session) {
     # lookup video start time when new lap is chosen
     observeEvent(input$mappedlap, {
         ml <- laps[[as.numeric(input$mappedlap)]]$Lap[1]
-        updateTextInput(session, "vidStartInput",
+        updateNumericInput(session, "vidStartInput",
                         label=paste("Start time for lap", ml),
                         value=trunc(starttimes[ml]/1000.0))
     })
@@ -530,7 +508,7 @@ server <- function(input, output, session) {
     observeEvent(input$reset_plot, {
         plot.range$x <- xlimits 
         plot.range$y <- ylimits
-        bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0)
+        bp <<- bpreset
     })
     
     # double the size of the zoomed area
@@ -539,7 +517,7 @@ server <- function(input, output, session) {
         yspan <- plot.range$y[2] - plot.range$y[1]
         plot.range$x <- c(plot.range$x[1]-xspan/2, plot.range$x[2]+xspan/2)
         plot.range$y <- c(plot.range$y[1]-yspan/2, plot.range$y[2]+yspan/2)
-        bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0)
+        bp <<- bpreset
     })
     
     output$speedplot <- renderPlot({
@@ -570,57 +548,24 @@ server <- function(input, output, session) {
         }
     })
     
-    # Video tab
+    # Video player
+    # https://developers.google.com/youtube/iframe_api_reference documents the options available
     output$vidid <- renderUI({
-        embed_youtube(input$vididInput, height=500, query="autoplay=1") %>% use_start_time(input$vidStartInput)
-    })
-    
-    # Turn Analysis tab
-    # start with same picker as plot, since we want to compare multiple laps
-    output$turnstab <- renderDT({
-        req(lapdf)
-        datatable(lapdf[input$laplist_rows_selected, colmap[1,]], selection=list(selected=matrix(c(1,2),1), mode='multiple', target='cell'),
-                  options=list(pageLength=5, ordering=FALSE, initComplete=htmlwidgets::JS(
-                      "function(settings, json) {",
-                      "$(this.api().table().container()).css({'font-size': '80%'});",
-                      "}")
-                  )
-        ) %>% formatStyle(1, target="row", fontWeight="bold") #, color = colpal(input$laplist_rows_selected))
-    })
-    
-    # plot the line through the turn
-    output$turnplot <- renderPlot({
-        cs <<- input$turnstab_cells_selected #matrix of the lap [,1] and value [,2] to plot in order
-        ylimits <<- c(0,0) # track the limits of the data across all selected sources
-        xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
-        if (length(input$laplist_rows_selected) > 0 && length(cs) > 0) {
-            for (i in 1:length(cs[,1])) {
-                # cs[i,1] is the row in the table, index into the selected rows to find which lap
-                lap <- laps[[input$laplist_rows_selected[cs[i,1]]]]
-                xlimits <<- c(min(xlimits[1], min(lap[,30])), max(xlimits[2], max(lap[,30])))
-                ylimits <<- c(min(ylimits[1], min(lap[,unpick(cs[i,2])])), max(ylimits[2], max(lap[,unpick(cs[i,2])])))
-                if (i==1) {
-                    # create the plot, pick axes limits etc. column 2 is time in milliseconds, 30 is distance
-                    plot(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i,
-                         xlab="Miles", ylab=names(lap)[unpick(cs[i,2])],
-                         # ordered list of cells to plot, lookup which rows in laplist, and lap numbers from lapdf column 1
-                         main="", xlim = plot.range$x, ylim = plot.range$y)
-                } else {
-                    # add more lines to the plot
-                    lines(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i)
-                }
-                # label the lap at the first data point, in the same color, with the right lap number
-                text(x=0, y=lap[1,unpick(cs[i,2])], labels=paste("Lap", lapdf[input$laplist_rows_selected[cs[i,1]],1],
-                            # if the line is different to the original y axis, label its data type
-                            ifelse(cs[1,2]==cs[i,2], "", names(lap)[unpick(cs[i,2])])), col=i, pos=4)
-            }
+        req(input$youtube)
+        if (req(input$vidStartInput, input$vidStartOffset, input$youtubeOffset)) {
+            st <- input$vidStartInput + input$vidStartOffset + input$youtubeOffset
+        } else {
+            st <- 0
         }
+        input$replay # depend on this changing to reload video
+        embed_youtube(input$youtube, height=400, query="autoplay=1") %>%
+            use_start_time(st)
     })
-    
+
     # Metadata tab
     # input$ fields to save/restore in metadata
-    textFieldsInput <- c("track", "drivername", "sessionorganizer", "color", "controlarms")
-    numericFieldsInput <- c("carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
+    textFieldsInput <- c("youtube", "track", "drivername", "sessionorganizer", "color", "controlarms")
+    numericFieldsInput <- c("youtubeOffset", "carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
                          "ambienttemperature", "surfacetemperature", "modelyear", "coldpressure", "frontcamber",
                          "rearcamber")
     selectFieldsInput <- c("driverexperience", "sessiontype", "sessionlevel", "units",
