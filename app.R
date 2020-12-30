@@ -44,15 +44,17 @@ FocusChoice <- c("Performance","Temperature","Plots","Turns","Driver")
 ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 turns <<- data.frame() # initialize and clear for ui reference
-bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0) # so that addCircles doesn't get null
+bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0, Speed..MPH.=0, Lateral.Acceleration..m.s.2.=0) # so that addCircles doesn't get null
 vidid <- "35TXBtYDOA4" # sample youtube id to start with
 vidstart <- "5s"
+error <- ""
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
     rtf <<- try(read.csv(trackfile))
     if (length(names(rtf)) != 29) {
-        stop("Expected 29 columns in tesla telemetry csv file")
+        error <<- "Expected 29 columns in tesla telemetry csv file"
+        return(FALSE)
     }
     # collapse data by averaging repeated location points, reduces size to about a fifth
     tf <<- collapv(rtf, c(1,5,4))
@@ -81,8 +83,10 @@ ptf <- function(trackfile, all=FALSE) {
                 laps[[lapcnt]] <<- l # only append good laps to the global list
         }
     }
-    if (lapcnt==0)
+    if (lapcnt==0) {
+        error <<- "No laps found in telemetry file"
         return(FALSE)
+    }
     lapl <- lapply(laps, plap) # run plap against the list of laps and accumulate results
     lapdf <<- data.frame(t(sapply(lapl,c))) # convert to data frame - looked this up on stack overflow...
     # sort the list of laps and summary data to have fastest first
@@ -109,6 +113,7 @@ ptf <- function(trackfile, all=FALSE) {
     } else {
         metadf <<- NULL
     }
+    error <<- ""
     return(TRUE)
 }
 
@@ -307,7 +312,8 @@ server <- function(input, output, session) {
         laps=NULL,
         lapdf=NULL,
         metadf=NULL,
-        turns=NULL
+        turns=NULL,
+        error=NULL
     )
     # Generate all the reactive directory and file paths needed for this run, extract date/time from filename
     # Users username path... telemetry-v1-2020-10-09-11_56_58.csv
@@ -328,7 +334,11 @@ server <- function(input, output, session) {
         rp$metadata <- metadata
     }
     # where to get telemetry file from
-    volumes <- c(Home = fs::path_home(), getVolumes()())
+    if (exists("telemetrydir")) {
+        volumes <- c(wd=telemetrydir, Home = fs::path_home(), getVolumes()())
+    } else {
+        volumes <- c(Home = fs::path_home(), getVolumes()())
+    }
     # load file from popup button
     observe({
         req(input$tfile)
@@ -337,24 +347,30 @@ server <- function(input, output, session) {
         req(fp$datapath)
         makeFilePaths(fp$datapath, paths)
         if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
-            if (!ptf(filename, all=TRUE)) # try again without filter
-                stop("No laps found in telemetry file")
+            ptf(filename, all=TRUE) # try again without filter
         }
         rdata$laps <- laps
         rdata$lapdf <- lapdf
         rdata$metadf <- metadf
         rdata$turns <- turns
+        rdata$error <- error
     })
     
     # refresh displayed paths
     output$filename <- renderText({
         req(paths$filename)
-        paths$filename
+        if (rdata$error != "") {
+            rdata$error
+        } else {
+            paths$filename
+        }
     })
+    
     output$telemetrydate <- renderText({
         req(paths$telemetrydate)
         paths$telemetrydate
     })
+    
     output$telemetrytime <- renderText({
         req(paths$telemetrytime)
         paths$telemetrytime
@@ -391,7 +407,8 @@ server <- function(input, output, session) {
                 addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                            color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                            label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G")) %>%
-                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=3, color="yellow")
+                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=3, color="yellow",
+                           label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G"))
         }
     })
     
