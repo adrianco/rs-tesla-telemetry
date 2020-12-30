@@ -391,7 +391,7 @@ server <- function(input, output, session) {
                 addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                            color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                            label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G")) %>%
-                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=1, color="black")
+                addCircles(data=bp, lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=3, color="yellow")
         }
     })
     
