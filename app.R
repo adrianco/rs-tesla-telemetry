@@ -45,7 +45,7 @@ ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 turns <<- data.frame() # initialize and clear for ui reference
 bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0, Speed..MPH.=0, Lateral.Acceleration..m.s.2.=0) # so that addCircles doesn't get null
-vidid <- "35TXBtYDOA4" # sample youtube id to start with
+vidid <- "wMQZDMQ8bLQ" # sample youtube id to start with
 vidstart <- "5s"
 error <- ""
 
