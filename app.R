@@ -14,6 +14,7 @@ library(collapse)
 library(olctools)
 library(shinyFiles)
 library(stringr)
+library(vembedr)
 
 # clear out persisted data
 laps <<- NULL
@@ -43,7 +44,9 @@ FocusChoice <- c("Performance","Temperature","Plots","Turns","Driver")
 ylimits <<- c(0,0) # track the limits of the data across all selected sources
 xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
 turns <<- data.frame() # initialize and clear for ui reference
-bp <<- data.frame(Longitude..decimal.=0, Latitude..decimal.=0) # so that addCircles doesn't get null
+bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0) # so that addCircles doesn't get null
+vidid <- "35TXBtYDOA4" # sample youtube id to start with
+vidstart <- "5s"
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
@@ -92,14 +95,14 @@ ptf <- function(trackfile, all=FALSE) {
     trackdir <<- paste0("tracks", .Platform$file.sep, encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
     fn <- paste0(trackdir, .Platform$file.sep, "turns.csv")
     turns <<- data.frame(row.names="Start", lat=laps[[1]][1,4], lng=laps[[1]][1,5], radius=10) # start line default
-    if (!dir.exists(trackdir)) {
-        dir.create(trackdir)
-    }
-    if (!file.exists(fn)) {
-        file.create(fn)
-        write.csv(turns, file = fn, quote = TRUE) # write new
-    }
-    tryCatch(turns <<- read.csv(fn,row.names=1), error=write.csv(turns, file = fn, quote = TRUE)) # overwrite bad file
+    #if (!dir.exists(trackdir)) {
+    #    dir.create(trackdir)
+    #}
+    #if (!file.exists(fn)) {
+    #    file.create(fn)
+    #    write.csv(turns, file = fn, quote = TRUE) # write new
+    #}
+    #tryCatch(turns <<- read.csv(fn,row.names=1), error=write.csv(turns, file = fn, quote = TRUE)) # overwrite bad file
     mn <<- file.path(telemetrydir, metadata)
     if (file.exists(mn)) {
         metadf <<- try(read.csv(mn))
@@ -146,12 +149,13 @@ ui <- fluidPage(
             titlePanel("Shiny Tesla Telemetry Analyzer"),
             p("Open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500),
+            hr(),
             splitLayout(cellWidths="25%",
-                        tags$b(shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file', multiple=FALSE)),
-                        tags$b(textOutput("telemetrydate"), "  ", textOutput("telemetrytime"), textOutput("strack")),
+                        shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file',
+                                         multiple=FALSE, buttonType="primary"),
+                        tags$b(textOutput("strack"), textOutput("telemetrydate"), "  ", textOutput("telemetrytime")),
                         selectInput("mappedlap", "Mapped Lap", NULL)
             ),
-            hr(),
             h4("Pick complete laps to compare, sorted fastest first from:"),
             p(textOutput("filename")),
             DTOutput("laplist")
@@ -252,6 +256,14 @@ ui <- fluidPage(
                          hr(),
                          DTOutput("turnstab")
                          ),
+                    tabPanel("Video",
+                        uiOutput("vidid"),
+                        splitLayout(cellWidths=c("15%","15%","50%"),
+                                    textInput("vididInput", "YouTube ID", vidid),
+                                    textInput("vidStartInput", "Start Offset", vidstart),
+                                    h4(br()," ")
+                            )
+                        ),
                     tabPanel("Turn Editor",
                         h3("Setup Turns for a Track (work in progress)"),
                         splitLayout(cellWidths=c("25%"),
@@ -416,7 +428,7 @@ server <- function(input, output, session) {
         ) %>% formatStyle(1, target="row", fontWeight="bold")
     })
     
-    gyr <- hcl.colors(100, palette="RdYlGn",rev=TRUE)
+    #gyr <- hcl.colors(100, palette="RdYlGn",rev=TRUE)
     # colour the array of circles according to the temperature array
     tempcolor <- function(x) {
         ifelse(x > 1.0, "red", ifelse(x > 0.8, "orange", "green"))
@@ -530,6 +542,11 @@ server <- function(input, output, session) {
         }
     })
     
+    # Video tab
+    output$vidid <- renderUI({
+        embed_youtube(input$vididInput, height=500, query="autoplay=1") %>% use_start_time(input$vidStartInput)
+    })
+    
     # Turn Analysis tab
     # start with same picker as plot, since we want to compare multiple laps
     output$turnstab <- renderDT({
@@ -586,7 +603,7 @@ server <- function(input, output, session) {
     # build a list of name=value pairs and transpose to columns
     formData <- reactive({
         data <- sapply(fieldsInput, function(x) input[[x]])
-        data <- c(telemetry=telemetry, telemetrydate=telemetrydate, telemetrytime=telemetrytime, telemetrylatlong=telemetrylatlong,
+        data <- c(telemetry=cat(paths$telemetry), telemetrydate=cat(paths$telemetrydate), telemetrytime=cat(paths$telemetrytime), telemetrylatlong=cat(paths$telemetrylatlong),
                   data, timestamp = as.character(as.integer(Sys.time())))
         data <- t(data)
         data
@@ -637,11 +654,7 @@ server <- function(input, output, session) {
 # Run the application
 # initialization section
 # if started from the command line with 'Rscript app.R filename', use the filename given
-#if (length(commandArgs(TRUE)) > 0) {
-#    filename <- commandArgs(TRUE)
-#    makeFilePaths(filename, paths) #no longer in scope
-    #} else {
-    #filename <- file.choose()
-    #makeFilePaths(filename, paths)
-#}
+if (length(commandArgs(TRUE)) > 0) {
+    cmdname <<- commandArgs(TRUE)
+}
 shinyApp(ui = ui, server = server)
