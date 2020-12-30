@@ -48,6 +48,7 @@ bp <- data.frame(Longitude..decimal.=0, Latitude..decimal.=0, Speed..MPH.=0, Lat
 vidid <- "wMQZDMQ8bLQ" # sample youtube id to start with
 vidstart <- "5s"
 error <- ""
+starttimes <<- array() # times that each lap starts
 
 # process a telemetry file
 ptf <- function(trackfile, all=FALSE) {
@@ -66,8 +67,10 @@ ptf <- function(trackfile, all=FALSE) {
     lapmax <<- max(tf$Lap) # max lap count in file (which starts at Lap 0)
     lapcnt <<- 0    # number of good laps in the file
     laps <<- list() # reset global empty list
+    starttimes[1] <<- tail(tf[tf$Lap==0,2],1)
     for (i in 1:lapmax) { # ignore lap 0
         l <- tf[tf$Lap==i,] # get the data for one lap
+        starttimes[i+1] <<- starttimes[i] + tail(l[,2],1)
         ln <- length(l$Lap) # get the number of data points
         # does the lap go all the way across the circuit and start end nearly the same place? 
         if (all || (abs(max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
@@ -265,7 +268,7 @@ ui <- fluidPage(
                         uiOutput("vidid"),
                         splitLayout(cellWidths=c("15%","15%","50%"),
                                     textInput("vididInput", "YouTube ID", vidid),
-                                    textInput("vidStartInput", "Start Offset", vidstart),
+                                    textInput("vidStartInput", "Start time for lap", "0s"),
                                     h4(br()," ")
                             )
                         ),
@@ -416,6 +419,14 @@ server <- function(input, output, session) {
     observeEvent(input$laplist_rows_selected, {
         x <- setNames(as.list(input$laplist_rows_selected), lapdf[input$laplist_rows_selected,1])
         updateSelectInput(session, "mappedlap", choices=x)
+    })
+    
+    # lookup video start time when new lap is chosen
+    observeEvent(input$mappedlap, {
+        ml <- laps[[as.numeric(input$mappedlap)]]$Lap[1]
+        updateTextInput(session, "vidStartInput",
+                        label=paste("Start time for lap", ml),
+                        value=trunc(starttimes[ml]/1000.0))
     })
     
     # pop a chooser to pick a local file to display
