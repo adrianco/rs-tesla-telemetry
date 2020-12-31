@@ -11,7 +11,6 @@ library(shiny)
 library(leaflet)
 library(DT)
 library(collapse)
-library(olctools)
 library(shinyFiles)
 library(stringr)
 library(vembedr)
@@ -48,8 +47,10 @@ bpreset <- data.frame(Elapsed.Time..ms.=0, Longitude..decimal.=0, Latitude..deci
 bp <- bpreset
 error <- ""
 starttimes <<- array() # times that each lap starts
+gms <- 9.80665 # convert meters pers second to G force
 
-# process a telemetry file
+
+# process a telemetry file - no dependencies on Shiny UI
 ptf <- function(trackfile, all=FALSE) {
     rtf <<- try(read.csv(trackfile))
     if (length(names(rtf)) != 29) {
@@ -97,13 +98,9 @@ ptf <- function(trackfile, all=FALSE) {
     lapdf <<- lapdf[o,]
     row.names(lapdf) <<- lapdf$lapnum  # otherwise it numbers sequentially
     telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5])
-    # read in locations of turn apexes for a specific track, use rounded off open location code to identify
-    trackdir <<- paste0("tracks", .Platform$file.sep, encode_olc(laps[[1]][1,4], laps[[1]][1,5], 8))
-    fn <- paste0(trackdir, .Platform$file.sep, "turns.csv")
-    turns <<- data.frame(row.names="Start", lat=laps[[1]][1,4], lng=laps[[1]][1,5], radius=10) # start line default
-    #if (!dir.exists(trackdir)) {
-    #    dir.create(trackdir)
-    #}
+    # read in saved locations of turn apexes
+    fn <- file.path(telemetrydir, paste0("turns", namebase))
+    turns <<- data.frame(row.names="Start", miles=0.0, lat=laps[[1]][1,4], lng=laps[[1]][1,5]) # start line default
     #if (!file.exists(fn)) {
     #    file.create(fn)
     #    write.csv(turns, file = fn, quote = TRUE) # write new
@@ -126,7 +123,6 @@ plap <- function(lap) {
     lt <- max(rtf[rtf$Lap==lap[1,1],2])/1000.0
     #lt <- lap[laplen,2]/1000.0
     KW <- max(lap[,13])
-    gms <<- 9.80665
     # lap number, time in seconds, time converted to MM:SS.mmm format
     lapinfo <- data.frame(lapnum=lap[1,1], seconds=lt, minutes=sprintf("%d:%02d.%03d", lt%/%60, trunc(lt%%60), round((1000*lt)%%1000)),
                           # speed and power
@@ -245,19 +241,21 @@ ui <- fluidPage(
                                     uiOutput("vidid"),
                                     DTOutput("turnslist")
                          ),
-                         splitLayout(cellWidths=c("15%"),
+                         splitLayout(cellWidths=c("8%", "14%","14%", "2%", "11%", "14%"),
                                      actionButton("replay", "Replay", class="btn-primary"),
-                                     #textInput("vididInput", "YouTube ID"),
                                      numericInput("vidStartInput", "Start time for lap", 0, min=0),
-                                     numericInput("vidStartOffset", "Offset within lap", 0)
+                                     numericInput("vidStartOffset", "Offset within lap", 0),
+                                     br(),
+                                     actionButton("saveturn", "Save as Turn", class="btn-primary"),
+                                     textInput("turnname", "Turn Name", placeholder="Brush area first")
                          ),
                          plotOutput("speedplot", height='400px',
                                     dblclick = "plot_dblclick",
                                     brush = brushOpts(id = "plot_brush", clip=FALSE, resetOnNew=TRUE)),
-                         splitLayout(cellWidths=c("15%","15%", "70%"), # some option buttons
+                         splitLayout(cellWidths=c("12%","12%", "70%"), # some option buttons
                                      actionButton("zoom_out", "Zoom Out", class="btn-primary"),
                                      actionButton("reset_plot", "Reset Axes", class="btn-primary"),
-                                     h4(" Select and move region with mouse and double-click to zoom in")
+                                     h4(" Select and move brush region with mouse and double-click to zoom in")
                          ),                         
                          hr(),
                          DTOutput("plottab")
@@ -381,10 +379,11 @@ server <- function(input, output, session) {
             }
         }
         ml <- as.numeric(input$mappedlap)
+        req(rdata$turns) # make sure this updates when turns changes
         if (length(input$laplist_rows_selected) > 0 && !is.na(ml)) {
             leaflet(laps[[as.numeric(ml)]]) %>% addTiles() %>%
                 fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-                addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
+                addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=10) %>%
                 addCircles(lng=~Longitude..decimal., lat=~Latitude..decimal., radius=1,
                            color=~accelcolor(Longitudinal.Acceleration..m.s.2.),
                            label=~paste(Speed..MPH., "mph ", round(Lateral.Acceleration..m.s.2./gms, 2), "G")) %>%
@@ -445,7 +444,7 @@ server <- function(input, output, session) {
         if (length(input$laplist_rows_selected) > 0 && length(input$temptab_rows_selected) > 0) {
         leaflet(laps[[input$laplist_rows_selected[input$temptab_rows_selected]]]) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
-            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=turns$radius) %>%
+            addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=10) %>%
             addCircles(lng= ~Longitude..decimal., lat= ~Latitude..decimal., radius=1,
                        color= ~tempcolor(Battery.Temp....),
                        label= ~paste(" Battery:", round(Battery.Temp....,2),
@@ -501,6 +500,14 @@ server <- function(input, output, session) {
         } else {
             plot.range$x <- NULL
             plot.range$y <- NULL
+        }
+    })
+    
+    # save turn info to turn table
+    observeEvent(input$saveturn, {
+        if (!is.na(bp[1,4])) {
+            turns <<- rbind(turns, data.frame(row.names=input$turnname, miles=round(bp$Distance[1],2), lat=bp[1,4], lng=bp[1,5]))
+            rdata$turns <- turns #trigger the UI update
         }
     })
     
@@ -614,13 +621,27 @@ server <- function(input, output, session) {
     # Turn setup tab
     output$turnslist <- renderDT({
         req(rdata$turns)
-        datatable(turns, selection=list(selected=matrix(c(1,2),1), mode='single', target='cell'),
+        datatable(turns, selection=list(selected=matrix(c(1,2),1), mode='single', target='row'),
                   options=list(pageLength=15, ordering=FALSE, initComplete=htmlwidgets::JS(
                       "function(settings, json) {",
                       "$(this.api().table().container()).css({'font-size': '80%'});",
                       "}")
                   )
         ) %>% formatStyle(1, target="row", fontWeight="bold") #, color = colpal(input$laplist_rows_selected))
+    })
+    
+    # turn selector - set video to play from that point
+    observeEvent(input$turnslist_rows_selected, {
+        if (length(input$turnslist_rows_selected) == 1) {
+            m <- turns[input$turnslist_rows_selected,1]
+            l <- laps[[as.numeric(input$mappedlap)]]
+            # need to find the time in the lap where the distance just reaches m
+            # difference so that this is decreasing and abs so it reaches zero and stays there
+            # return the index of the first zero
+            i <- which.min(abs(m - l$Distance))
+            #print(l[i,c(2,30)])
+            updateNumericInput(session, "vidStartOffset", value=floor(l[i,2]/1000))
+        }
     })
 } #end of server
 
