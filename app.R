@@ -48,14 +48,20 @@ bp <- bpreset
 error <- ""
 starttimes <<- array() # times that each lap starts
 gms <- 9.80665 # convert meters pers second to G force
+racelogic <<- FALSE
 
 
 # process a telemetry file - no dependencies on Shiny UI
 ptf <- function(trackfile, all=FALSE) {
     rtf <<- try(read.csv(trackfile))
     if (length(names(rtf)) != 29) {
-        error <<- "Expected 29 columns in tesla telemetry csv file"
-        return(FALSE)
+        if (length(names(rtf)) != 33) {
+            error <<- "Expected 29 or 33 columns in tesla telemetry csv file"
+            return(FALSE)
+        } else {
+            rtf <<- rtf[,c(1:18,23:33)] # remove extra tire pressure in lbs columns
+            racelogic <<- TRUE # assume time has been changed to racelogic import format
+        }
     }
     # collapse data by averaging repeated location points, reduces size to about a fifth
     tf <<- collapv(rtf, c(1,5,4))
@@ -67,10 +73,15 @@ ptf <- function(trackfile, all=FALSE) {
     lapmax <<- max(tf$Lap) # max lap count in file (which starts at Lap 0)
     lapcnt <<- 0    # number of good laps in the file
     laps <<- list() # reset global empty list
-    starttimes[1] <<- tail(tf[tf$Lap==0,2],1)
+    starttimes[1] <<- tail(tf[tf$Lap==0,2],1) # last timestamp in lap 0
     for (i in 1:lapmax) { # ignore lap 0
         l <- tf[tf$Lap==i,] # get the data for one lap
-        starttimes[i+1] <<- starttimes[i] + tail(l[,2],1)
+        if (racelogic) {# culmulative lap times
+            starttimes[i+1] <<- tail(l[,2],1) # last timestamp in previous lap
+            l[,2] <- l[,2] - starttimes[i]    # change timestamps to restart each lap
+        } else {        # lap times reset for each lap
+            starttimes[i+1] <<- starttimes[i] + tail(l[,2],1)
+        }
         ln <- length(l$Lap) # get the number of data points
         # does the lap go all the way across the circuit and start end nearly the same place? 
         if (all || (abs(max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
@@ -119,9 +130,7 @@ ptf <- function(trackfile, all=FALSE) {
 # process a lap
 plap <- function(lap) {
     laplen <- length(lap[,2])
-    # take the last sample for the lap from the raw data, not the collapsed average
-    lt <- max(rtf[rtf$Lap==lap[1,1],2])/1000.0
-    #lt <- lap[laplen,2]/1000.0
+    lt <- lap[laplen,2]/1000.0
     KW <- max(lap[,13])
     # lap number, time in seconds, time converted to MM:SS.mmm format
     lapinfo <- data.frame(lapnum=lap[1,1], seconds=lt, minutes=sprintf("%d:%02d.%03d", lt%/%60, trunc(lt%%60), round((1000*lt)%%1000)),
