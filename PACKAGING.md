@@ -1,6 +1,8 @@
 Packaging Instructions
 ======================
 
+Documenting my attempts to make this work. Photon doesn't work at all, and it's bundled outdated R and electron versions. Some pull requests made to fix some of the issues, but have given up for the moment.
+
 Install Packaging System
 ------------------------
 
@@ -17,10 +19,10 @@ The downloaded binary packages are in
 	/var/folders/yz/7k7dhbdn2ybdzxwd18lndmrjvwy8xp/T//RtmpTDAcVF/downloaded_packages
 ```
 
-2. Install Photon
+2. Install Photon - fixed forked version
 ```
-> remotes::install_github("ColumbusCollaboratory/photon")
-Downloading GitHub repo ColumbusCollaboratory/photon@HEAD
+> remotes::install_github("adrianco/photon")
+Downloading GitHub repo adrianco/photon@HEAD
 These packages have more recent versions available.
 It is recommended to update all of them.
 Which would you like to update?
@@ -119,7 +121,7 @@ Fix the permission and install npm
 4. RStudio setup
 Make sure your github directory is not stored on DropBox, as Photon cannot cope with directory paths that contaion '(' or ')' as created by DropBox.
 
-Open photon as a new project. Then select rs-tesla-telemetry and hit the Build button. It will download electron-quick-start but has a directory location bug.
+Open photon as a new project. Then select rs-tesla-telemetry and hit the Build button. It will download electron-quick-start etc.
 
 ```
 > photon:::photon_rstudioaddin()
