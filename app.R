@@ -53,7 +53,7 @@ racelogic <<- FALSE
 
 # process a telemetry file - no dependencies on Shiny UI
 ptf <- function(trackfile, all=FALSE) {
-    rtf <<- try(read.csv(trackfile))
+    rtf <<- try(read.csv(trackfile, check.names=FALSE))
     if (length(names(rtf)) != 29) {
         if (length(names(rtf)) != 33) {
             error <<- "Expected 29 or 33 columns in tesla telemetry csv file"
@@ -63,6 +63,9 @@ ptf <- function(trackfile, all=FALSE) {
             racelogic <<- TRUE # assume time has been changed to racelogic import format
         }
     }
+    # save the original names of the columns as raw.names, and update with valid R syntax names
+    raw.names <- names(rtf)
+    names(rtf) <<- make.names(names(rtf))
     # collapse data by averaging repeated location points, reduces size to about a fifth
     tf <<- collapv(rtf, c(1,5,4))
     # re-sort by lap and time
@@ -549,7 +552,7 @@ server <- function(input, output, session) {
                 if (i==1) {
                     # create the plot, pick axes limits etc. column 2 is time in milliseconds, 30 is distance
                     plot(lap[,30], lap[,unpick(cs[i,2])],type='l',col=i,
-                         xlab="Miles", ylab=names(lap)[unpick(cs[i,2])],
+                         xlab="Miles", ylab=raw.names[unpick(cs[i,2])],
                          # ordered list of cells to plot, lookup which rows in laplist, and lap numbers from lapdf column 1
                          main="", xlim = plot.range$x, ylim = plot.range$y)
                 } else {
@@ -559,7 +562,7 @@ server <- function(input, output, session) {
                 # label the lap at the first data point, in the same color, with the right lap number
                 text(x=0, y=lap[1,unpick(cs[i,2])], labels=paste("Lap", lapdf[input$laplist_rows_selected[cs[i,1]],1],
                     # if the line is different to the original y axis, label its data type
-                    ifelse(cs[1,2]==cs[i,2], "", names(lap)[unpick(cs[i,2])])), col=i, pos=4)
+                    ifelse(cs[1,2]==cs[i,2], "", raw.names[unpick(cs[i,2])])), col=i, pos=4)
             }
         }
     })
