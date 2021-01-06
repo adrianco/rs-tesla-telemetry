@@ -7,22 +7,23 @@
 #    http://shiny.rstudio.com/
 #
 
-library(shiny)
-library(leaflet)
-library(DT)
-library(collapse)
-library(shinyFiles)
-library(stringr)
-library(vembedr)
+library(shiny)      # user interface
+library(leaflet)    # mapping
+library(DT)         # data tables
+library(collapse)   # sub sample data to GPS frequency
+library(shinyFiles) # local file read popup
+library(stringr)    # string processing
+library(vembedr)    # video embedding
 
-# clear out persisted data
+# clear out persisted data that is saved in R when the app isn't running
 laps <<- NULL
 lapdf <<- NULL
 tf <<- NULL
 dtf <<- NULL
 metadf <<- NULL
 
-# Metadata Choices
+# Metadata Choices mostly taken from Tesla Motors Club Model 3 road course modification guide thread
+# https://teslamotorsclub.com/tmc/threads/master-thread-comprehensive-road-course-modification-guide-—-optimizing-the-3-for-the-track.173484/
 other <- "Other-see comments"
 SessionTypeChoice <- c("Track Day","Autocross","Race","Qualifying","Time Trial","Dragstrip","Drift")
 SessionLevelChoice <- c("Free Passing","Restricted Passing","Point-by","Novice","Solo")
@@ -30,9 +31,9 @@ DriverExperienceChoice <- c("Advanced", "Intermediate", "Novice (less than 5 tra
 CourseConditionChoice <- c("Dry Sunny", "Dry Overcast", "Damp", "Wet")
 ModelChoice <- c("3","Y")
 SpecificationChoice <- c("Dual Motor Performance", "Dual Motor Long Range", "Long Range", "Mid Range", "Standard Range")
-WheelChoice <- c("Sport 20", "ZeroG 20", "Sport 19", "PowerSports 19", "Aero 18", other)
+WheelChoice <- c("UberTurbine 20", "Turbine20", "ZeroG 20", "Sport 19", "PowerSports 19", "Aero 18", other)
 TireSizeChoice <- c("235/35-20", "235/40-19", "235/45-18", other)
-TireTypeChoice <- c("Michelin Pilot Sport 4S-20", "Continental Procontact RX-19", "Michelin MXM4-18", other)
+TireTypeChoice <- c("Pirelli P-Zero PZ4-20","Michelin Pilot Sport 4S-20", "Continental Procontact RX-19", "Michelin MXM4-18", other)
 BrakePadChoice <- c("Stock", "Carbotech RP2", "Racing Brake XT910", "Racing Brake XT970", "Unpluigged Performance Street/Track", "Unplugged Performance Track Only", other)
 BrakeRotorChoice <- c("Stock", "Racing Brake", "Mountain Pass Performance", other)
 BrakeCaliperChoice <- c("Performance", "Standard", other)
@@ -223,7 +224,7 @@ ui <- fluidPage(
                          splitLayout(cellWidths="25%",
                                      selectInput("model", "Model", ModelChoice),
                                      selectInput("specification", "Specification", SpecificationChoice),
-                                     numericInput("modelyear", "Model Year", 2020, 2018),
+                                     numericInput("modelyear", "Model Year", format(Sys.Date(), "%Y")),
                                      textInput("color", "Color", "Blue")),
                          splitLayout(cellWidths="25%",
                                      selectInput("wheel", "Wheel", WheelChoice),
