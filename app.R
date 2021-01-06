@@ -50,12 +50,12 @@ error <- ""
 starttimes <<- array() # times that each lap starts
 gms <- 9.80665 # convert meters pers second to G force
 bpsi <- 14.50377 # convert bar to psi
-racelogic <<- FALSE
+render <<- FALSE
 
 
 # process a telemetry file - no dependencies on Shiny UI
 ptf <- function(trackfile, all=FALSE) {
-    racelogic <<- FALSE
+    render <<- FALSE
     rtf <<- try(read.csv(trackfile, check.names=FALSE))
     if (length(names(rtf)) != 29) {
         if (length(names(rtf)) != 33) {
@@ -63,7 +63,7 @@ ptf <- function(trackfile, all=FALSE) {
             return(FALSE)
         } else {
             rtf <<- rtf[,c(1:18,23:33)] # remove extra tire pressure in lbs columns
-            racelogic <<- TRUE # assume time has been changed to racelogic import format
+            render <<- TRUE # assume time has been changed to render import format
         }
     }
     # save the original names of the columns as raw.names, and update with valid R syntax names
@@ -82,7 +82,7 @@ ptf <- function(trackfile, all=FALSE) {
     starttimes[1] <<- tail(tf[tf$Lap==0,2],1) # last timestamp in lap 0
     for (i in 1:lapmax) { # ignore lap 0
         l <- tf[tf$Lap==i,] # get the data for one lap
-        if (racelogic) {# culmulative lap times
+        if (render) {# culmulative lap times
             starttimes[i+1] <<- tail(l[,2],1) # last timestamp in previous lap
             l[,2] <- l[,2] - starttimes[i]    # change timestamps to restart each lap
         } else {        # lap times reset for each lap
@@ -168,7 +168,7 @@ ui <- fluidPage(
             p("Documentation and open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500),
             hr(),
-            splitLayout(cellWidths=c("15%","15%","20%","20%"),
+            splitLayout(cellWidths=c("14%","18%","20%","20%"),
                         shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file',
                                          multiple=FALSE, buttonType="primary"),
                         actionButton("rlsave", "...", class = "btn-primary"),
@@ -347,8 +347,8 @@ server <- function(input, output, session) {
         rdata$metadf <- metadf
         rdata$turns <- turns
         rdata$error <- error
-        if (!racelogic) { # only save if it wasn't read as racelogic
-            updateActionButton(session, "rlsave", label="Save Racelogic")
+        if (!render) { # only save if it wasn't read as render
+            updateActionButton(session, "rlsave", label="Save Render Format")
         }
     })
     
@@ -428,9 +428,9 @@ server <- function(input, output, session) {
     # pop a chooser to pick a local file to display
     shinyFileChoose(input, 'tfile', root=volumes, filetypes=c('csv'), session=session)
     
-    # save in racelogic format
+    # save in render format
     observeEvent(input$rlsave, {
-        if (!racelogic) { # only save if it wasn't read as racelogic
+        if (!render) { # only save if it wasn't read as render
             rlnames <- c(raw.names[1:18], "FL PSI", "FR PSI", "RL PSI", "RR PSI", raw.names[19:29])
             rl <- cbind(rtf[,1:18], (rtf[,15:18] * bpsi), rtf[,19:29])
             names(rl) <- rlnames
@@ -440,7 +440,7 @@ server <- function(input, output, session) {
                 rl[lf,2] <- rl[lf,2] + starttimes[ts] # add the start time to all the times for each lap
             }
             options(scipen=10) # avoid scientific notation
-            write.csv(rl, file=file.path(telemetrydir, paste0("racelogic", namebase)), row.names=FALSE)
+            write.csv(rl, file=file.path(telemetrydir, paste0("render", namebase)), row.names=FALSE)
             updateActionButton(session, "rlsave", label="...") # confirm saved
         }
     })
