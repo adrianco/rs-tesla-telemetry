@@ -48,11 +48,13 @@ bp <- bpreset
 error <- ""
 starttimes <<- array() # times that each lap starts
 gms <- 9.80665 # convert meters pers second to G force
+bpsi <- 14.50377 # convert bar to psi
 racelogic <<- FALSE
 
 
 # process a telemetry file - no dependencies on Shiny UI
 ptf <- function(trackfile, all=FALSE) {
+    racelogic <<- FALSE
     rtf <<- try(read.csv(trackfile, check.names=FALSE))
     if (length(names(rtf)) != 29) {
         if (length(names(rtf)) != 33) {
@@ -87,9 +89,9 @@ ptf <- function(trackfile, all=FALSE) {
         }
         ln <- length(l$Lap) # get the number of data points
         # does the lap go all the way across the circuit and start end nearly the same place? 
-        if (all || (abs(max(l[,4]) - min(l[,4]))/latspan > 0.95) &&
-            (abs(max(l[,5]) - min(l[,5]))/longspan > 0.95) &&
-            (abs(l[1,4] - l[ln,4]) < 0.0001) && (abs(l[1,5] - l[ln,5]) < 0.0001)) {
+        if (all | (abs(max(l[,4]) - min(l[,4]))/latspan > 0.95) &
+            (abs(max(l[,5]) - min(l[,5]))/longspan > 0.95) &
+            (abs(l[1,4] - l[ln,4]) < 0.0001) & (abs(l[1,5] - l[ln,5]) < 0.0001)) {
                 lapcnt <<- lapcnt+1
                 # add distance as a derived column for plotting instead of time
                 # difference time from time dropping the first one and duplicating last in the column
@@ -162,12 +164,13 @@ ui <- fluidPage(
     sidebarLayout(
         sidebarPanel(width=6,
             titlePanel("Shiny Tesla Telemetry Analyzer"),
-            p("Open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
+            p("Documentation and open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500),
             hr(),
-            splitLayout(cellWidths="25%",
+            splitLayout(cellWidths=c("15%","15%","20%","20%"),
                         shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file',
                                          multiple=FALSE, buttonType="primary"),
+                        actionButton("rlsave", "...", class = "btn-primary"),
                         tags$b(textOutput("strack"), textOutput("telemetrydate"), "  ", textOutput("telemetrytime")),
                         selectInput("mappedlap", "Mapped Lap", NULL)
             ),
@@ -343,6 +346,9 @@ server <- function(input, output, session) {
         rdata$metadf <- metadf
         rdata$turns <- turns
         rdata$error <- error
+        if (!racelogic) { # only save if it wasn't read as racelogic
+            updateActionButton(session, "rlsave", label="Save Racelogic")
+        }
     })
     
     # refresh displayed paths
@@ -392,7 +398,7 @@ server <- function(input, output, session) {
         }
         ml <- as.numeric(input$mappedlap)
         req(rdata$turns) # make sure this updates when turns changes
-        if (length(input$laplist_rows_selected) > 0 && !is.na(ml)) {
+        if (length(input$laplist_rows_selected) > 0 & !is.na(ml) & as.numeric(ml) < lapcnt) {
             leaflet(laps[[as.numeric(ml)]]) %>% addTiles() %>%
                 fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
                 addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=10) %>%
@@ -420,6 +426,23 @@ server <- function(input, output, session) {
     
     # pop a chooser to pick a local file to display
     shinyFileChoose(input, 'tfile', root=volumes, filetypes=c('csv'), session=session)
+    
+    # save in racelogic format
+    observeEvent(input$rlsave, {
+        if (!racelogic) { # only save if it wasn't read as racelogic
+            rlnames <- c(raw.names[1:18], "FL PSI", "FR PSI", "RL PSI", "RR PSI", raw.names[19:29])
+            rl <- cbind(rtf[,1:18], (rtf[,15:18] * bpsi), rtf[,19:29])
+            names(rl) <- rlnames
+            # time offset
+            for (ts in 1:max(rl$Lap)) {
+                lf <- (rl$Lap==ts) # vector of TRUE for this lap
+                rl[lf,2] <- rl[lf,2] + starttimes[ts] # add the start time to all the times for each lap
+            }
+            options(scipen=10) # avoid scientific notation
+            write.csv(rl, file=file.path(telemetrydir, paste0("racelogic", namebase)), row.names=FALSE)
+            updateActionButton(session, "rlsave", label="...") # confirm saved
+        }
+    })
     
     # Speed summary table
     output$speedtab <- renderDT({
@@ -453,7 +476,7 @@ server <- function(input, output, session) {
     
     
     output$tempmap <- renderLeaflet({
-        if (length(input$laplist_rows_selected) > 0 && length(input$temptab_rows_selected) > 0) {
+        if (length(input$laplist_rows_selected) > 0 & length(input$temptab_rows_selected) > 0) {
         leaflet(laps[[input$laplist_rows_selected[input$temptab_rows_selected]]]) %>% addTiles() %>%
             fitBounds(min(tf[5]),  min(tf[4]), max(tf[5]), max(tf[4])) %>%
             addCircles(lng=turns$lng, lat=turns$lat, popup=row.names(turns), color="black", radius=10) %>%
@@ -543,7 +566,7 @@ server <- function(input, output, session) {
         cs <- input$plottab_cells_selected #matrix of the lap [,1] and value [,2] to plot in order
         ylimits <<- c(0,0) # track the limits of the data across all selected sources
         xlimits <<- c(0,0) # plot limits uses just the first data set picked to start with
-        if (length(input$laplist_rows_selected) > 0 && length(cs) > 0) {
+        if (length(input$laplist_rows_selected) > 0 & length(cs) > 0) {
             for (i in 1:length(cs[,1])) {
                 # cs[i,1] is the row in the table, index into the selected rows to find which lap
                 lap <- laps[[input$laplist_rows_selected[cs[i,1]]]]
