@@ -24,13 +24,13 @@ When the app starts it has a blank display, hit the Load Local File button to ge
 ![Screenshot](screenshots/BlankStart.png)
 
 Enter metadata about the session, and a YouTube ID if you have one.
-![Screenshot](screenshots/Metadata.png)
+![Screenshot](screenshots/metadata.png)
  
 See how the laps compare and whether the car has overheated during the lap
-![Screenshot](screenshots/Temperature.png)
+![Screenshot](screenshots/temperature.png)
  
 Plot comparisons between laps, and see video of turns
-![Screenshot](screenshots/Plots.png)
+![Screenshot](screenshots/plots.png)
 
 Zoom into corners
 ![Screenshot](screenshots/PlotsCorkscrew.png)
