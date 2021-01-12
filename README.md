@@ -9,6 +9,9 @@ Running the app, the telemetry file needs to be on the same machine, specified o
 
 For now the easiest way to run the app is by using RStudio to load it from github, and run it. It has been tested on both Mac and Windows. Some work to try and package it as a standalone app has run into packaging bugs.
 
+Instructions on how to download and a guide to the app functionality is in [this YouTube video](https://youtu.be/pJ1_Kv36w4M). 
+
+
 To run the app from the command line without RStudio give the track file path like this:
 ```
 % Rscript app.R /Users/anc/Dropbox/cars/TeslaTrackMode/telemetry-v1-2020-10-09-11_56_58.csv
