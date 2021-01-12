@@ -156,6 +156,7 @@ plap <- function(lap) {
                           # averages and extra stats added later - keeping column numbers consistent
                           minKW=round(min(lap[,13])), avgThrottle=round(mean(lap$Throttle.Position....)),
                           avgKW=round(mean(lap[,13])), maxSteerRate=round(max(abs(lap$Steering.Angle.Rate..deg.s.))),
+                          # percent of the time spent at maximum throttle during the lap
                           maxThrottle=round(sum((lap$Throttle.Position....>99.9))*100/length(lap$Throttle.Position....))
                           )
     return(lapinfo)
@@ -347,6 +348,7 @@ server <- function(input, output, session) {
         req(input$tfile) # require that this exists, and trigger this function when it changes
         fp <- parseFilePaths(roots=volumes,selection=input$tfile)
         req(fp$datapath) # require a non null result
+        updateTextInput(session, "youtube", "") # make sure it's cleared
         makeFilePaths(fp$datapath, paths)
         if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
             ptf(filename, all=TRUE) # try again without filter
@@ -719,15 +721,18 @@ server <- function(input, output, session) {
     # Video player
     # https://developers.google.com/youtube/iframe_api_reference documents the options available
     output$vidid <- renderUI({
-        req(input$youtube)
         if (req(input$vidStartInput, input$vidStartOffset, input$youtubeOffset)) {
             st <- input$vidStartInput + input$vidStartOffset + input$youtubeOffset
         } else {
             st <- 0
         }
         input$replay # depend on this changing to reload video
-        embed_youtube(input$youtube, height=400, query="autoplay=1") %>%
-            use_start_time(st)
+        if (input$youtube == "") {
+            p("No YouTube ID provided")
+        } else {
+            embed_youtube(input$youtube, height=400, query="autoplay=1") %>%
+                use_start_time(st)
+        }
     })
 
     # Turns list
