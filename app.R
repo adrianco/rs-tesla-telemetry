@@ -81,13 +81,14 @@ ptf <- function(trackfile, all=FALSE) {
     lapcnt <<- 0    # number of good laps in the file
     laps <<- list() # reset global empty list
     starttimes[1] <<- tail(tf[tf$Lap==0,2],1) # last timestamp (column 2) in lap 0 is the start time for lap 1
-    for (i in 1:lapmax) { # ignore lap 0
+    for (i in 0:lapmax) { # need lap 0 for autoX etc.
         l <- tf[tf$Lap==i,] # get the data for one lap
         if (render) {# culmulative lap times
             starttimes[i+1] <<- tail(l[,2],1) # last timestamp in previous lap
             l[,2] <- l[,2] - starttimes[i]    # change timestamps to restart each lap
         } else {        # lap times reset for each lap
-            starttimes[i+1] <<- starttimes[i] + tail(l[,2],1)
+            if (i > 0)
+                starttimes[i+1] <<- starttimes[i] + tail(l[,2],1)
         }
         ln <- length(l$Lap) # get the number of data points
         # does the lap go over 95% of the way across the circuit and start end nearly the same place? 
