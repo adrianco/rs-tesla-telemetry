@@ -212,7 +212,7 @@ ui <- fluidPage(
                                      numericInput("carnumber", "Car Number", 44, 1), #Hamilton default
                                      numericInput("passengers", "Passengers", 0, 0)),
                          splitLayout(cellWidths="25%",
-                                     p("Track mode settings"),
+                                     textInput("version", "Tesla Release Version", ""),
                                      numericInput("handlingbalance", "Handling Balance", 50),
                                      numericInput("stabilityassist", "Stability Assist", 0),
                                      numericInput("regenerativebraking", "Regenerative Braking", 100)),
@@ -349,7 +349,7 @@ server <- function(input, output, session) {
         req(input$tfile) # require that this exists, and trigger this function when it changes
         fp <- parseFilePaths(roots=volumes,selection=input$tfile)
         req(fp$datapath) # require a non null result
-        updateTextInput(session, "youtube", "") # make sure it's cleared
+        updateTextInput(session, "youtube", value="") # make sure it's cleared
         makeFilePaths(fp$datapath, paths)
         if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
             ptf(filename, all=TRUE) # try again without filter
@@ -486,7 +486,7 @@ server <- function(input, output, session) {
     # Metadata tab
     #
     # input$ fields to save/restore in metadata, need to add to these lists if new metata types are created
-    textFieldsInput <- c("youtube", "track", "drivername", "sessionorganizer", "color", "controlarms")
+    textFieldsInput <- c("youtube", "version", "track", "drivername", "sessionorganizer", "color", "controlarms")
     numericFieldsInput <- c("youtubeOffset", "carnumber", "passengers", "handlingbalance", "stabilityassist", "regenerativebraking",
                             "ambienttemperature", "surfacetemperature", "modelyear", "coldpressure", "frontcamber",
                             "rearcamber")
@@ -495,7 +495,7 @@ server <- function(input, output, session) {
                            "tiresize", "tiretype", "brakepad", "brakerotor", "brakecaliper", "brakefluid", "coilovers")
     textAreaFieldsInput <- "comments"
     fieldsInput <- c(numericFieldsInput, textFieldsInput, selectFieldsInput, textAreaFieldsInput)
-    # build a list of name=value pairs and transpose to columns
+    # build a list of name=value pairs and transpose to columns - got this code from stack overflow...
     formData <- reactive({
         data <- sapply(fieldsInput, function(x) input[[x]])
         data <- c(telemetry=paste(paths$telemetry), telemetrydate=paste(paths$telemetrydate), telemetrytime=paste(paths$telemetrytime), telemetrylatlong=paste(paths$telemetrylatlong),
