@@ -8,6 +8,7 @@
 #
 
 library(shiny)      # user interface
+library(shinyjs)    # needed to manipulate video files
 library(leaflet)    # mapping
 library(DT)         # data tables
 library(collapse)   # sub sample data to GPS frequency
@@ -35,7 +36,7 @@ SpecificationChoice <- c("Dual Motor Performance", "Dual Motor Long Range", "Lon
 WheelChoice <- c("UberTurbine 20", "Turbine20", "ZeroG 20", "Sport 19", "PowerSports 19", "Aero 18", other)
 TireSizeChoice <- c("235/35-20", "235/40-19", "235/45-18", other)
 TireTypeChoice <- c("Pirelli P-Zero PZ4-20","Michelin Pilot Sport 4S-20", "Continental Procontact RX-19", "Michelin MXM4-18", other)
-BrakePadChoice <- c("Stock", "Carbotech RP2", "Racing Brake XT910", "Racing Brake XT970", "Unpluigged Performance Street/Track", "Unplugged Performance Track Only", other)
+BrakePadChoice <- c("Stock", "Carbotech RP2", "Carbotech XP10", "Racing Brake XT910", "Racing Brake XT970", "Unpluigged Performance Street/Track", "Unplugged Performance Track Only", other)
 BrakeRotorChoice <- c("Stock", "Racing Brake", "Mountain Pass Performance", other)
 BrakeCaliperChoice <- c("Performance", "Standard", other)
 BrakeFluidChoice <- c("Stock", "Motul RBF600", "Castrol SRF", other)
@@ -118,7 +119,7 @@ ptf <- function(trackfile, all=FALSE) {
     row.names(lapdf) <<- lapdf$lapnum  # overwrite the row names otherwise it numbers sequentially
     telemetrylatlong <<- paste0(laps[[1]][1,4], ";",laps[[1]][1,5]) # position of start line for best lap
     # read in saved locations of turns, usually around the braking point entering the turn
-    fn <- file.path(telemetrydir, paste0("turns", namebase))
+    fn <- file.path(telemetrydir, paste0("turns-v1", namebase))
     if (file.exists(fn)) {
         try(turns <<- read.csv(fn,row.names=1)) # read saved turns if they exist, column 1 as names
     } else {
@@ -132,6 +133,12 @@ ptf <- function(trackfile, all=FALSE) {
         metadf <<- try(read.csv(mn))
     } else {
         metadf <<- NULL
+    }
+    vf <- file.path(telemetrydir, paste0("laps", namebase))
+    if (file.exists(vf)) {
+        videofile <<- vf
+    } else {
+        videofile <<- NULL
     }
     error <<- ""
     return(TRUE)
@@ -163,9 +170,16 @@ plap <- function(lap) {
     return(lapinfo)
 }
 
+# Javascript code to pause local video playback and go to a specific time
+jsCode <- "shinyjs.vid0 = function(value){
+  var vid=document.getElementById('v0');
+  vid.pause();
+  vid.currentTime=value;}"
 
 # Define UI for application to summarize Tesla track data
 ui <- fluidPage(
+    useShinyjs(),
+    extendShinyjs(text = jsCode, functions=c("vid0")),
     # Application title
     sidebarLayout(
         sidebarPanel(width=6,
@@ -173,10 +187,14 @@ ui <- fluidPage(
             p("Documentation and open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500), # main map display
             hr(),
-            splitLayout(cellWidths=c("14%","18%","20%","20%"),
+            splitLayout(cellWidths=c("14%","17%","14%","17%", "20%", "12%"),
                         shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file',
                                          multiple=FALSE, buttonType="primary"),
                         actionButton("rlsave", "...", class = "btn-primary"),
+                        shinyFilesButton('vfile', label='Local Video File', title='Please select the matching laps mp4 file',
+                                         multiple=FALSE, buttonType="primary"),
+                        shinyFilesButton('rfile', label='Load Reference Lap', title='Please select a reference csv file',
+                                         multiple=FALSE, buttonType='primary'),
                         tags$b(textOutput("strack"), textOutput("telemetrydate"), "  ", textOutput("telemetrytime")),
                         selectInput("mappedlap", "Mapped Lap", NULL)
             ),
@@ -331,10 +349,10 @@ server <- function(input, output, session) {
         rp$telemetrydate <- paste(telemetrysplit[3:5], collapse='-') # "2020-10-09"
         rp$telemetrytime <- paste(telemetrysplit[6:8], collapse=':') # "11:56:58"
         # construct filename base for additional export files
-        namebase <<- sprintf("-v1-%s-%s-%s-%s_%s_%s.csv", telemetrysplit[3], telemetrysplit[4], telemetrysplit[5],
+        namebase <<- sprintf("-%s-%s-%s-%s_%s_%s.csv", telemetrysplit[3], telemetrysplit[4], telemetrysplit[5],
                                telemetrysplit[6], telemetrysplit[7], telemetrysplit[8])
         # metadata saved and loaded matching each telemetry file
-        metadata <<- paste0("metadata", namebase) # metadata-v1-2020-10-09-11_56_58.csv
+        metadata <<- paste0("metadata-v1", namebase) # metadata-v1-2020-10-09-11_56_58.csv
         rp$metadata <- ""   # clear this until a metadata file is written
     }
     # where to get telemetry files from - telemetrydir is persisted across invocations of the app
@@ -363,6 +381,18 @@ server <- function(input, output, session) {
         if (!render) { # only save if it wasn't read as render format
             updateActionButton(session, "rlsave", label="Save Render Format")
         }
+    })
+    
+    # load local video file using file chooser popup button
+    observe({
+        req(input$vfile) # require that this exists, and trigger this function when it changes
+        fp <- parseFilePaths(roots=volumes,selection=input$vfile)
+        req(fp$datapath) # require a non null result
+        videofile <- fp$datapath
+        updateTextInput(session, "videofile", value="Local laps mp4")
+
+        # update the reactive data that will trigger the UI update
+        #rdata$video <- video
     })
     
     #
@@ -462,8 +492,10 @@ server <- function(input, output, session) {
                         value=trunc(starttimes[ml]/1000.0))
     })
     
-    # create a pop up chooser to pick a local file to display
+    # create pop up choosers to pick local files to display
     shinyFileChoose(input, 'tfile', root=volumes, filetypes=c('csv'), session=session)
+    shinyFileChoose(input, 'vfile', root=volumes, filetypes=c('mp4'), session=session)
+    shinyFileChoose(input, 'rfile', root=volumes, filetypes=c('csv'), session=session)
     
     # save in render format - add PSI columns and change the time to be cumulative
     observeEvent(input$rlsave, {
@@ -477,7 +509,7 @@ server <- function(input, output, session) {
                 rl[lf,2] <- rl[lf,2] + starttimes[ts] # add the start time to all the times for each lap
             }
             options(scipen=10) # avoid scientific notation in the written values
-            write.csv(rl, file=file.path(telemetrydir, paste0("render", namebase)), row.names=FALSE)
+            write.csv(rl, file=file.path(telemetrydir, paste0("render-v1", namebase)), row.names=FALSE)
             updateActionButton(session, "rlsave", label="...") # confirm saved
         }
     })
@@ -664,7 +696,7 @@ server <- function(input, output, session) {
     
     # save turns to file for next time. Change button label to show it's complete
     observeEvent(input$fileturns, {
-        write.csv(turns, file = file.path(telemetrydir, paste0("turns", namebase)))
+        write.csv(turns, file = file.path(telemetrydir, paste0("turns-v1", namebase)))
         updateActionButton(session, "fileturns", label="...")
     })
     
