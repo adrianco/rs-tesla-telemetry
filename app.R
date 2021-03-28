@@ -22,6 +22,7 @@ lapdf <<- NULL      # summary data frame, one row per lap
 tf <<- NULL         # raw data frame as read from telemetry file
 metadf <<- NULL     # metadata about the session, data frame with one row
 starttimes <<- array() # times that each lap starts in seconds, offset from start of file
+videofile <<- NULL  # local laps video file matching the telemetry file
 
 
 # Metadata Choices mostly taken from Tesla Motors Club Model 3 road course modification guide thread
@@ -134,12 +135,6 @@ ptf <- function(trackfile, all=FALSE) {
     } else {
         metadf <<- NULL
     }
-    vf <- file.path(telemetrydir, paste0("laps", namebase))
-    if (file.exists(vf)) {
-        videofile <<- vf
-    } else {
-        videofile <<- NULL
-    }
     error <<- ""
     return(TRUE)
 }
@@ -171,15 +166,15 @@ plap <- function(lap) {
 }
 
 # Javascript code to pause local video playback and go to a specific time
-jsCode <- "shinyjs.vid0 = function(value){
-  var vid=document.getElementById('v0');
-  vid.pause();
-  vid.currentTime=value;}"
+#jsCode <- "shinyjs.vid0 = function(value){
+#  var vid=document.getElementById('v0');
+#  vid.pause();
+#  vid.currentTime=value;}"
 
 # Define UI for application to summarize Tesla track data
 ui <- fluidPage(
-    useShinyjs(),
-    extendShinyjs(text = jsCode, functions=c("vid0")),
+    #useShinyjs(),
+    #extendShinyjs(text = jsCode, functions=c("vid0")),
     # Application title
     sidebarLayout(
         sidebarPanel(width=6,
@@ -187,7 +182,7 @@ ui <- fluidPage(
             p("Documentation and open source at: ", tags$a(href="github.com/adrianco/rs-tesla-telemetry", "github.com/adrianco/rs-tesla-telemetry")),
             leafletOutput("sidemap", height=500), # main map display
             hr(),
-            splitLayout(cellWidths=c("14%","17%","14%","17%", "20%", "12%"),
+            splitLayout(cellWidths=c("14%","17%","14%","17%", "18%", "9%", "10%"),
                         shinyFilesButton('tfile', label='Load Local File', title='Please select a telemetry csv file',
                                          multiple=FALSE, buttonType="primary"),
                         actionButton("rlsave", "...", class = "btn-primary"),
@@ -196,7 +191,8 @@ ui <- fluidPage(
                         shinyFilesButton('rfile', label='Load Reference Lap', title='Please select a reference csv file',
                                          multiple=FALSE, buttonType='primary'),
                         tags$b(textOutput("strack"), textOutput("telemetrydate"), "  ", textOutput("telemetrytime")),
-                        selectInput("mappedlap", "Mapped Lap", NULL)
+                        selectInput("mappedlap", "Mapped Lap", NULL),
+                        actionButton("saveref", "Save Ref", class = "btn-primary")
             ),
             h4("Pick complete laps to compare, sorted fastest first from:"),
             p(textOutput("filename")),
@@ -212,11 +208,9 @@ ui <- fluidPage(
                                      verbatimTextOutput("metadatafile", TRUE),
                                      tags$head(tags$style(HTML(".shiny-split-layout > div {overflow: visible;}")))), #need this once per panel to make select menus not clip
                          hr(), # Output section
-                         splitLayout(cellWidths=c("35%","32%","18%","15%"),
-                                     verbatimTextOutput("telemetry", TRUE),
+                         splitLayout(cellWidths=c("32%","68%"),
                                      verbatimTextOutput("latlong", TRUE),
-                                     verbatimTextOutput("date", TRUE),
-                                     verbatimTextOutput("time", TRUE)
+                                     verbatimTextOutput("videolapsfile", TRUE)
                          ),
                          hr(), # Input section
                          splitLayout(cellWidths=c("50%","25%", "25%"),
@@ -279,7 +273,14 @@ ui <- fluidPage(
                 tabPanel("Plots",
                          h3("Video, Turns and Plots"),
                          splitLayout(cellWidths=c("70%","30%"),
-                                    uiOutput("vidid"),
+                                    # Update input$vid0_currentTime
+                                    #tags$script("
+                                    #   document.getElementById('replay').onclick = function() {
+                                    #   var myVid = document.getElementById('v0');
+                                    #   Shiny.onInputChange('vid0_currentTime', myVid.currentTime);
+                                    #   };
+                                    #"),
+                                    uiOutput("vidid"), #video display
                                     DTOutput("turnslist")
                          ),
                          splitLayout(cellWidths=c("8%", "14%","14%", "2%", "11%", "14%", "2%", "11%"),
@@ -368,6 +369,7 @@ server <- function(input, output, session) {
         fp <- parseFilePaths(roots=volumes,selection=input$tfile)
         req(fp$datapath) # require a non null result
         updateTextInput(session, "youtube", value="") # make sure it's cleared
+        videofile <<- NULL   # clear local video file
         makeFilePaths(fp$datapath, paths)
         if (!ptf(filename, all=FALSE)) {  # default filter out bad laps
             ptf(filename, all=TRUE) # try again without filter
@@ -388,9 +390,9 @@ server <- function(input, output, session) {
         req(input$vfile) # require that this exists, and trigger this function when it changes
         fp <- parseFilePaths(roots=volumes,selection=input$vfile)
         req(fp$datapath) # require a non null result
-        videofile <- fp$datapath
-        updateTextInput(session, "videofile", value="Local laps mp4")
-
+        videofile <<- as.character(fp$datapath)
+        output$videolapsfile <- renderText({ videofile })
+        
         # update the reactive data that will trigger the UI update
         #rdata$video <- video
     })
@@ -557,9 +559,7 @@ server <- function(input, output, session) {
     # update when metadata changes
     observeEvent(rdata$metadf, {
         # fixed output values added to metadata file
-        output$telemetry <- renderText({ paths$telemetry })
-        output$date <- renderText({ paste("Date:", paths$telemetrydate) })
-        output$time <- renderText({ paste("Time:", paths$telemetrytime) })
+        output$videolapsfile <- renderText({ videofile })
         output$latlong <- renderText({ paste("Lat;Long:", telemetrylatlong) })
         # put any values that were read at startup back into the display
         if (!is.null(rdata$metadf)) {
@@ -751,7 +751,7 @@ server <- function(input, output, session) {
         }
     })
     
-    # Video player
+    # Video player - see issue #6 for code this is based on to play local video
     # https://developers.google.com/youtube/iframe_api_reference documents the options available
     output$vidid <- renderUI({
         if (req(input$vidStartInput, input$vidStartOffset, input$youtubeOffset)) {
@@ -760,14 +760,31 @@ server <- function(input, output, session) {
             st <- 0
         }
         input$replay # depend on this changing to reload video
-        if (input$youtube == "") {
-            p("No YouTube ID provided")
+        if (!is.null(videofile)) {
+            # Local Video output in HTML
+            HTML(paste('<video id="v0" controls tabindex="0" height = "380px">',
+                   '<source type="video/mp4" ',
+                   paste0('src="', videofile, '"></source>'))
+            )
         } else {
-            embed_youtube(input$youtube, height=400, query="autoplay=1") %>%
-                use_start_time(st)
+            if (input$youtube == "") {
+                p("No video file selected or YouTube ID provided")
+            } else {
+                embed_youtube(input$youtube, height=400, query="autoplay=1") %>%
+                    use_start_time(st)
+            }
         }
     })
 
+    observeEvent(input$videofile, {
+        if (req(input$vidStartInput, input$vidStartOffset, input$youtubeOffset)) {
+            st <- input$vidStartInput + input$vidStartOffset + input$youtubeOffset
+        } else {
+            st <- 0
+        }
+        js$vid0(input$vid0_currentTime + 1 / 34) # Tesla video is 34 frames per second
+    })
+    
     # Turns list
     output$turnslist <- renderDT({
         req(rdata$turns)
